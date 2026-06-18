@@ -76,7 +76,7 @@ def save_game(
         "food": np.round(ecosystem.world.food, 3).tolist(),
         "entities": [_entity_to_dict(e) for e in ecosystem.entities],
     }
-    Path(path).write_text(json.dumps(data))
+    Path(path).write_text(json.dumps(data), encoding="utf-8")
     log.info(
         "saved game  path=%s  tick=%d  entities=%d",
         path,
@@ -91,7 +91,7 @@ def load_game(path: str | Path) -> tuple[Ecosystem, WorldConfig, list[SpeciesCon
     Raises:
         ValueError: if the file's save version is unsupported.
     """
-    data = json.loads(Path(path).read_text())
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
     version = data.get("version")
     if version != SAVE_VERSION:
         raise ValueError(f"unsupported save version: {version!r} (expected {SAVE_VERSION})")

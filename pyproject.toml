@@ -57,3 +57,35 @@ known-first-party = ["life_simulator"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# --- Pylint ----------------------------------------------------------------
+
+[tool.pylint.main]
+py-version = "3.11"
+# pygame's constants (K_*, SRCALPHA, ...) live in a C extension that static
+# analysis cannot see, producing spurious no-member errors. Skip member checks
+# for the package; ruff + tests cover real misuse.
+ignored-modules = ["pygame"]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.design]
+max-args = 10
+max-positional-arguments = 10
+max-locals = 25
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-function-docstring",    # test functions are self-describing
+    "missing-class-docstring",       # small dataclasses / config holders
+    "import-outside-toplevel",       # deliberate lazy imports break screen cycles
+    "cyclic-import",                 # setup_screen <-> sim_screen via lazy import
+    "broad-exception-caught",        # save/load + pygame pump guards log & continue
+    "unused-argument",               # Screen interface methods accept unused params
+    "protected-access",              # tests assert on internals (e.g. Genome._BOUNDS)
+    "wrong-import-position",         # __main__ configures logging before imports
+    "wrong-import-order",            # import ordering is owned by ruff (isort)
+    "ungrouped-imports",             # ditto
+    "too-many-instance-attributes",  # UI screens hold many widgets; _Vals is a snapshot
+]

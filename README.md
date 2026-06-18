@@ -69,12 +69,18 @@ panel with its full genome, energy bar, and age.
 ```bash
 make test       # run tests with full output
 make test-fast  # run tests quietly
-make lint       # ruff check (read-only)
+make lint       # ruff check + pylint (read-only)
+make pylint     # pylint on all tracked files (mirrors the GitHub workflow)
 make fmt        # ruff fix + format in-place
 make fmt-check  # ruff check + format --check (CI-safe)
-make ci         # fmt-check + test in one shot
+make ci         # fmt-check + pylint + test in one shot
 make clean      # remove __pycache__, .pytest_cache, build artifacts
 ```
+
+Linting is enforced in CI by the [Pylint workflow](.github/workflows/pylint.yml),
+which runs `pylint` on every tracked `.py` file under Python 3.11 and 3.12.
+Pylint's configuration lives in the `[tool.pylint.*]` sections of
+[pyproject.toml](pyproject.toml).
 
 ## Project layout
 

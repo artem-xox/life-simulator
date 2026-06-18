@@ -126,7 +126,7 @@ class SetupScreen(Screen):
         v = self._vals
         mgr = self._mgr
         col_w, cols = self._col_layout()
-        Y0, ROW = self._Y0, self._ROW_H
+        y0, row_h = self._Y0, self._ROW_H
         self._param_rows.clear()
 
         def r(x: int, y: int, w: int = col_w, h: int = 26) -> pygame.Rect:
@@ -143,7 +143,7 @@ class SetupScreen(Screen):
             fmt: Callable,
         ) -> UIHorizontalSlider:
             x = cols[col]
-            y = Y0 + row * ROW
+            y = y0 + row * row_h
             lbl = UILabel(r(x, y, col_w, 20), f"{name}: {fmt(val)}", mgr)
             sld = UIHorizontalSlider(
                 r(x, y + 22, col_w, 28), val, (lo, hi), mgr, click_increment=step
@@ -152,10 +152,10 @@ class SetupScreen(Screen):
             return sld
 
         # ---- seed row (spans column 0) --------------------------------------
-        UILabel(r(cols[0], Y0, 70, 22), "Seed:", mgr)
-        self._seed_entry = UITextEntryLine(r(cols[0] + 75, Y0, col_w - 145, 28), mgr)
+        UILabel(r(cols[0], y0, 70, 22), "Seed:", mgr)
+        self._seed_entry = UITextEntryLine(r(cols[0] + 75, y0, col_w - 145, 28), mgr)
         self._seed_entry.set_text(str(v.seed))
-        self._rnd_btn = UIButton(r(cols[0] + col_w - 65, Y0, 65, 28), "Random", mgr)
+        self._rnd_btn = UIButton(r(cols[0] + col_w - 65, y0, 65, 28), "Random", mgr)
 
         # ---- world column (col 0, rows 1-4) ---------------------------------
         self._s_water = add_slider(
@@ -208,7 +208,7 @@ class SetupScreen(Screen):
         )
 
         # ---- start / load buttons -------------------------------------------
-        btn_y = Y0 + 6 * ROW + 16
+        btn_y = y0 + 6 * row_h + 16
         btn_w, btn_h = 240, 48
         cx = self._w // 2
         self._start_btn = UIButton(

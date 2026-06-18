@@ -53,11 +53,13 @@ class _Vals:
     h_vision: float = 5.0
     h_meta: float = 0.9
     h_repro: float = 0.78
+    h_mut: float = 0.05
     c_count: int = 15
     c_speed: float = 1.5
     c_vision: float = 9.0
     c_meta: float = 1.1
     c_repro: float = 0.80
+    c_mut: float = 0.05
 
 
 # ---- screen -----------------------------------------------------------------
@@ -88,6 +90,7 @@ class SetupScreen(Screen):
         self._seed_entry: UITextEntryLine
         self._rnd_btn: UIButton
         self._start_btn: UIButton
+        self._load_btn: UIButton
         self._s_water: UIHorizontalSlider
         self._s_climate: UIHorizontalSlider
         self._s_map_w: UIHorizontalSlider
@@ -97,11 +100,16 @@ class SetupScreen(Screen):
         self._s_h_vision: UIHorizontalSlider
         self._s_h_meta: UIHorizontalSlider
         self._s_h_repro: UIHorizontalSlider
+        self._s_h_mut: UIHorizontalSlider
         self._s_c_count: UIHorizontalSlider
         self._s_c_speed: UIHorizontalSlider
         self._s_c_vision: UIHorizontalSlider
         self._s_c_meta: UIHorizontalSlider
         self._s_c_repro: UIHorizontalSlider
+        self._s_c_mut: UIHorizontalSlider
+
+        self._load_requested = False
+        self._message: str = ""
 
         self._build_ui()
 
@@ -177,6 +185,9 @@ class SetupScreen(Screen):
         self._s_h_repro = add_slider(
             1, 4, "Repro threshold", v.h_repro, 0.40, 0.90, 0.01, lambda x: f"{x:.2f}"
         )
+        self._s_h_mut = add_slider(
+            1, 5, "Mutation rate", v.h_mut, 0.005, 0.30, 0.005, lambda x: f"{x:.3f}"
+        )
 
         # ---- carnivore column (col 2, rows 0-4) -----------------------------
         self._s_c_count = add_slider(
@@ -192,13 +203,22 @@ class SetupScreen(Screen):
         self._s_c_repro = add_slider(
             2, 4, "Repro threshold", v.c_repro, 0.40, 0.90, 0.01, lambda x: f"{x:.2f}"
         )
+        self._s_c_mut = add_slider(
+            2, 5, "Mutation rate", v.c_mut, 0.005, 0.30, 0.005, lambda x: f"{x:.3f}"
+        )
 
-        # ---- start button ---------------------------------------------------
-        btn_y = Y0 + 5 * ROW + 16
+        # ---- start / load buttons -------------------------------------------
+        btn_y = Y0 + 6 * ROW + 16
         btn_w, btn_h = 240, 48
+        cx = self._w // 2
         self._start_btn = UIButton(
-            r(self._w // 2 - btn_w // 2, btn_y, btn_w, btn_h),
+            r(cx - btn_w - 10, btn_y, btn_w, btn_h),
             "Start Simulation",
+            mgr,
+        )
+        self._load_btn = UIButton(
+            r(cx + 10, btn_y, btn_w, btn_h),
+            "Load Saved Game",
             mgr,
         )
 
@@ -220,11 +240,13 @@ class SetupScreen(Screen):
         v.h_vision = self._s_h_vision.get_current_value()
         v.h_meta = self._s_h_meta.get_current_value()
         v.h_repro = self._s_h_repro.get_current_value()
+        v.h_mut = self._s_h_mut.get_current_value()
         v.c_count = round(self._s_c_count.get_current_value())
         v.c_speed = self._s_c_speed.get_current_value()
         v.c_vision = self._s_c_vision.get_current_value()
         v.c_meta = self._s_c_meta.get_current_value()
         v.c_repro = self._s_c_repro.get_current_value()
+        v.c_mut = self._s_c_mut.get_current_value()
 
     # ---- Screen protocol ----------------------------------------------------
 
@@ -233,6 +255,8 @@ class SetupScreen(Screen):
         if event.type == pygame_gui.UI_BUTTON_PRESSED:
             if event.ui_element is self._start_btn:
                 self._start_requested = True
+            elif event.ui_element is self._load_btn:
+                self._load_requested = True
             elif event.ui_element is self._rnd_btn:
                 self._seed_entry.set_text(str(random.randint(0, 99_999)))
 
@@ -244,6 +268,9 @@ class SetupScreen(Screen):
         if self._start_requested:
             self._start_requested = False
             return self._launch_sim()
+        if self._load_requested:
+            self._load_requested = False
+            return self._load_sim()
         return None
 
     def draw(self, surface: pygame.Surface) -> None:
@@ -264,12 +291,12 @@ class SetupScreen(Screen):
             surf = self._font_hd.render(text, True, color)
             surface.blit(surf, (x, 88))
 
-        # Bottom hint
-        hint = self._font_hd.render(
-            "Drag sliders to tune parameters, then click  Start Simulation",
-            True,
-            _HINT_COLOR,
+        # Bottom hint (or a transient status message, e.g. a load error).
+        text = self._message or (
+            "Drag sliders to tune parameters, then Start Simulation — or Load a saved game"
         )
+        color = CARNIVORE_COLOR if self._message else _HINT_COLOR
+        hint = self._font_hd.render(text, True, color)
         surface.blit(hint, (w // 2 - hint.get_width() // 2, self._h - 28))
 
         self._mgr.draw_ui(surface)
@@ -306,6 +333,7 @@ class SetupScreen(Screen):
                     vision=round(v.h_vision, 1),
                     metabolism=round(v.h_meta, 2),
                     repro_threshold=round(v.h_repro, 2),
+                    mutation_rate=round(v.h_mut, 3),
                 ),
             ),
             SpeciesConfig(
@@ -316,6 +344,7 @@ class SetupScreen(Screen):
                     vision=round(v.c_vision, 1),
                     metabolism=round(v.c_meta, 2),
                     repro_threshold=round(v.c_repro, 2),
+                    mutation_rate=round(v.c_mut, 3),
                 ),
             ),
         ]
@@ -328,3 +357,19 @@ class SetupScreen(Screen):
             v.c_count,
         )
         return SimScreen(self._w, self._h, world_cfg, species)
+
+    def _load_sim(self) -> Screen | None:
+        """Load the default save file and jump straight into the simulation."""
+        from life_simulator.persistence.save_load import DEFAULT_SAVE_PATH, load_game
+        from life_simulator.ui.sim_screen import SimScreen
+
+        try:
+            eco, world_cfg, species = load_game(DEFAULT_SAVE_PATH)
+        except FileNotFoundError:
+            self._message = f"No save file found at {DEFAULT_SAVE_PATH}"
+            return None
+        except Exception as exc:
+            log.exception("load failed")
+            self._message = f"Load failed: {exc}"
+            return None
+        return SimScreen(self._w, self._h, world_cfg, species, ecosystem=eco)

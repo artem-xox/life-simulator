@@ -237,44 +237,54 @@ and transitions to `SimScreen`.
 | 2 | Entities | herbivores, carnivores, energy, eating, death | ✅ done |
 | 3 | Evolution | genome, reproduction, mutations, SpatialGrid | ✅ done |
 | 4 | Setup screen | pygame_gui menu, all params configurable | ✅ done |
-| 5 | SimScreen polish | click entity → info panel (genome, energy, age); live population graph | 🔲 next |
-| 6 | Stats & persistence | ring-buffer stats, matplotlib-style graph surface, save/load JSON | 🔲 planned |
+| 5 | SimScreen polish | click entity → inspector panel; live population graph | ✅ done |
+| 6 | Stats & persistence | ring-buffer stats, JSON save/load, mutation-rate sliders | ✅ done |
 
 ---
 
-## Stage 5 detail — SimScreen polish
+## Stage 5 — SimScreen polish (done)
 
-**Entity info panel** (click on a creature):
-- open a side panel (pygame_gui `UIPanel` or hand-drawn surface)
-- display: diet, age, energy bar, all genome values
-- close on second click or `Escape`
+**Entity inspector** (`ui/sim_screen.py`, `ui/render.py`):
+- left-click without dragging picks the nearest entity within 12 px
+  (`find_entity_at`); a left-drag still pans (distinguished by `_CLICK_TOLERANCE`).
+- the selected entity gets a yellow highlight ring (`draw_selection`).
+- a top-right panel shows diet, age / MAX_AGE, an energy bar, and every genome
+  value (speed, vision, metabolism, size, repro threshold, mutation rate).
+- selection clears automatically when the entity dies.
 
-**Population graph**:
-- `Stats` class: ring buffer of (tick, herb_count, carn_count) pairs
-- drawn as a small chart on the SimScreen (bottom strip or overlay)
-- x-axis = recent N ticks, y-axis = population; two coloured lines
+**Population graph** (`simulation/stats.py` + `ui/sim_screen.py`):
+- `Stats` is a bounded ring buffer (capacity 600) of `StatSample`
+  (tick, herb/carn counts, average speed/vision/size).
+- `Ecosystem` records a sample every `_SAMPLE_INTERVAL = 5` ticks.
+- bottom-right overlay draws two auto-scaled polylines (herb green, carn red)
+  with a legend; toggle with `G`.
+
+## Stage 6 — Stats & persistence (done)
+
+**Save / load** (`persistence/save_load.py`):
+- JSON v1: `tick_count`, `world_cfg`, `species` configs, the live `food` grid
+  (rounded to 3 dp), and every entity (x, y, energy, age, diet, genome).
+- terrain is regenerated from the seed on load (`generate`), the saved food
+  grid is applied over it, and entities are reconstructed verbatim via
+  `Ecosystem.from_saved`.
+- in-sim hotkeys `S` / `L`; the setup screen has a **Load Saved Game** button.
+- default path `life_sim_save.json` (git-ignored).
+
+**Balance**:
+- `mutation_rate` sliders added per species on the setup screen.
 
 ---
 
-## Stage 6 detail — Stats & persistence
+## Future work (post-v1)
 
-**Save / load**:
-- JSON format: `seed`, `world_cfg`, `species_configs`, `tick_count`
-- optional full entity dump (x, y, energy, age, genome for each entity)
-- compact save = just seed + config (world is fully reproducible)
-- full save = config + all entity states
+Near-term, building on what already exists:
+- Predator-prey parameter presets (stable, boom-bust, extinction-prone).
+- Average-genome evolution graph (data already collected in `Stats`).
+- Multiple named save slots / a save-file picker dialog.
+- Seasonal food-regrow multiplier / day-night cycle.
 
-**Balance polish**:
-- expose `mutation_rate` slider on setup screen
-- add predator-prey parameter presets (stable, boom-bust, extinction-prone)
-- consider seasonal food regrow multiplier
-
----
-
-## Open questions (post-v1)
-
+Larger ideas:
 - Sexual reproduction with crossover between two parents.
-- Day/night cycle and seasonal climate events.
 - Neural-network "brain" for entity decision making.
 - Multiple trophic levels (producers, herbivores, omnivores, carnivores, decomposers).
 - Export evolution graphs to PNG.

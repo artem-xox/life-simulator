@@ -90,3 +90,35 @@ def draw_entities(
         radius = max(2, round(entity.genome.size * camera.zoom * 0.38))
         color = HERBIVORE_COLOR if entity.diet == Diet.HERBIVORE else CARNIVORE_COLOR
         pygame.draw.circle(surface, color, (round(sx), round(sy)), radius)
+
+
+def find_entity_at(
+    entities: list[Entity],
+    camera: Camera,
+    sx: float,
+    sy: float,
+    pixel_radius: float = 12.0,
+) -> Entity | None:
+    """Return the living entity nearest to screen point ``(sx, sy)`` within range.
+
+    ``pixel_radius`` is the maximum screen-space distance (in pixels) at which a
+    click counts as selecting an entity.
+    """
+    best: Entity | None = None
+    best_dist = pixel_radius
+    for entity in entities:
+        if not entity.alive:
+            continue
+        ex, ey = camera.world_to_screen(entity.x, entity.y)
+        dist = ((ex - sx) ** 2 + (ey - sy) ** 2) ** 0.5
+        if dist <= best_dist:
+            best_dist = dist
+            best = entity
+    return best
+
+
+def draw_selection(surface: pygame.Surface, entity: Entity, camera: Camera) -> None:
+    """Draw a highlight ring around the selected entity."""
+    sx, sy = camera.world_to_screen(entity.x, entity.y)
+    radius = max(4, round(entity.genome.size * camera.zoom * 0.38)) + 4
+    pygame.draw.circle(surface, (255, 230, 90), (round(sx), round(sy)), radius, 2)

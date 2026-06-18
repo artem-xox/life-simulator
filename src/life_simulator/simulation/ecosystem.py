@@ -22,6 +22,7 @@ import numpy as np
 from life_simulator.simulation.entity import Diet, Entity
 from life_simulator.simulation.genome import Genome
 from life_simulator.simulation.spatial import SpatialGrid
+from life_simulator.simulation.stats import Stats
 from life_simulator.simulation.world import World
 from life_simulator.simulation.worldgen import WorldConfig, generate
 
@@ -60,11 +61,16 @@ class Ecosystem:
     # Log a population snapshot every this many ticks.
     _LOG_INTERVAL: int = 100
 
+    # Record a stats sample every this many ticks (keeps the buffer covering a
+    # useful time window even at high simulation speeds).
+    _SAMPLE_INTERVAL: int = 5
+
     def __init__(self, world: World) -> None:
         self.world = world
         self.entities: list[Entity] = []
         self.spatial = SpatialGrid()
         self.tick_count: int = 0
+        self.stats = Stats()
 
     @classmethod
     def create(
@@ -109,12 +115,23 @@ class Ecosystem:
             except Exception:
                 pass
 
+        eco.stats.record(eco.tick_count, eco.entities)
+
         log.info(
             "step 3/3 — ecosystem ready  entities=%d  (herb=%d  carn=%d)",
             len(eco.entities),
             eco.herbivore_count,
             eco.carnivore_count,
         )
+        return eco
+
+    @classmethod
+    def from_saved(cls, world: World, entities: list[Entity], tick_count: int) -> Ecosystem:
+        """Rebuild an Ecosystem from a loaded save (pre-built world + entities)."""
+        eco = cls(world)
+        eco.entities = entities
+        eco.tick_count = tick_count
+        eco.stats.record(tick_count, entities)
         return eco
 
     # --- Population queries ------------------------------------------------ #
@@ -151,6 +168,9 @@ class Ecosystem:
                 newborns = newborns[:slots]
             self.entities.extend(newborns)
         self.tick_count += 1
+
+        if self.tick_count % self._SAMPLE_INTERVAL == 0:
+            self.stats.record(self.tick_count, self.entities)
 
         if self.tick_count % self._LOG_INTERVAL == 0:
             log.info(

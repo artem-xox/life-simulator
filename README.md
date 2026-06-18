@@ -16,8 +16,8 @@ See [PLAN.md](PLAN.md) for the full design and roadmap.
 | 2 | Entities: herbivores, carnivores, energy, eating, death | ✅ done |
 | 3 | Genome, asexual reproduction, mutations, spatial index | ✅ done |
 | 4 | Setup screen (pygame_gui sliders + Start button) | ✅ done |
-| 5 | SimScreen polish: entity info on click, population graph | 🔲 next |
-| 6 | Statistics graphs, save/load, balance polish | 🔲 planned |
+| 5 | SimScreen polish: entity info on click, population graph | ✅ done |
+| 6 | Statistics, save/load, balance (mutation rate) | ✅ done |
 
 ## Requirements
 
@@ -39,22 +39,30 @@ parameters, then click **Start Simulation**.
 | Column | Parameters |
 |--------|-----------|
 | **World** | Seed, Water level, Climate (dry ↔ wet), Map width, Map height |
-| **Herbivores** | Count, Speed, Vision, Metabolism, Repro threshold |
-| **Carnivores** | Count, Speed, Vision, Metabolism, Repro threshold |
+| **Herbivores** | Count, Speed, Vision, Metabolism, Repro threshold, Mutation rate |
+| **Carnivores** | Count, Speed, Vision, Metabolism, Repro threshold, Mutation rate |
 
 Click **Random** to roll a new seed without changing other settings.
+**Load Saved Game** resumes the last save (`life_sim_save.json`) directly.
 
 ## Simulation controls
 
 | Input | Action |
 |-------|--------|
 | left-drag | pan camera |
+| left-click | select / inspect an entity (shows genome, energy, age) |
 | mouse wheel | zoom toward cursor |
 | `Space` | pause / resume |
 | `]` / `[` | speed up / slow down |
 | `F` | fit world to screen |
 | `R` | restart with a new random seed (same species) |
+| `S` / `L` | save / load the simulation |
+| `G` | toggle the population graph |
 | `ESC` | return to setup menu |
+
+The HUD shows live counts; the bottom-right graph plots herbivore and
+carnivore populations over time. Click any creature to open the inspector
+panel with its full genome, energy bar, and age.
 
 ## Development
 
@@ -80,15 +88,18 @@ src/life_simulator/
     worldgen.py       WorldConfig, generate() → World via OpenSimplex noise
     genome.py         Genome dataclass with Gaussian mutate()
     entity.py         Entity behaviour loop (move, eat, attack, reproduce)
-    ecosystem.py      Ecosystem: tick(), spawn, ENTITY_CAP=2000
+    ecosystem.py      Ecosystem: tick(), spawn, ENTITY_CAP=2000, Stats sampling
     spatial.py        SpatialGrid: hash buckets for O(k) neighbour queries
+    stats.py          Stats: ring buffer of population + average-genome samples
+  persistence/
+    save_load.py      JSON save/load of full simulation state
   ui/
     screen.py         Screen ABC + ScreenManager transition logic
-    setup_screen.py   pygame_gui configuration menu
-    sim_screen.py     main simulation view: world + HUD + camera controls
+    setup_screen.py   pygame_gui configuration menu (sliders + Start/Load)
+    sim_screen.py     simulation view: world + HUD + inspector + graph
     camera.py         Camera: zoom, pan, clamp, visible-rect culling
-    render.py         WorldRenderer (cached surface) + draw_entities()
+    render.py         WorldRenderer + draw_entities + selection/picking
   __main__.py         entry point (uv run life-sim)
-tests/                pytest suite (21 tests)
+tests/                pytest suite (30 tests)
 Makefile              dev workflow shortcuts
 ```

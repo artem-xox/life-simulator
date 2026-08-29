@@ -19,80 +19,63 @@ TARGET_FPS = 60
 BACKGROUND_COLOR = (18, 18, 22)
 
 
-# --- Biomes ----------------------------------------------------------------
+# --- Surfaces ---------------------------------------------------------------
 
 
-class Biome(IntEnum):
-    """Terrain types stored as small integers in the world's biome array.
+class Surface(IntEnum):
+    """Ground types stored as small integers in the world's surface array.
 
-    The integer values double as indices into the lookup tables below, so the
-    order here must stay in sync with those tables.
+    The world is a single temperate biome; what varies across it is the surface
+    underfoot. The integer values double as indices into the lookup tables
+    below, so the order here must stay in sync with those tables.
     """
 
-    DEEP_WATER = 0
-    WATER = 1
+    OCEAN = 0
+    FRESH_WATER = 1
     SAND = 2
-    GRASS = 3
-    FOREST = 4
-    MOUNTAIN = 5
-    SNOW = 6
+    FOREST = 3
 
 
-# RGB colour used to draw each biome on the map.
-BIOME_COLORS: dict[Biome, tuple[int, int, int]] = {
-    Biome.DEEP_WATER: (28, 56, 102),
-    Biome.WATER: (48, 92, 158),
-    Biome.SAND: (214, 197, 138),
-    Biome.GRASS: (104, 168, 84),
-    Biome.FOREST: (54, 110, 60),
-    Biome.MOUNTAIN: (122, 116, 110),
-    Biome.SNOW: (236, 238, 242),
+# RGB colour used to draw each surface on the map.
+SURFACE_COLORS: dict[Surface, tuple[int, int, int]] = {
+    Surface.OCEAN: (26, 54, 96),
+    Surface.FRESH_WATER: (58, 116, 178),
+    Surface.SAND: (216, 200, 146),
+    Surface.FOREST: (58, 118, 62),
 }
 
-# Maximum amount of food a single cell of each biome can hold. Zero means the
-# biome never grows food (water, rock, snow).
-BIOME_FOOD_MAX: dict[Biome, float] = {
-    Biome.DEEP_WATER: 0.0,
-    Biome.WATER: 0.0,
-    Biome.SAND: 2.0,
-    Biome.GRASS: 10.0,
-    Biome.FOREST: 6.0,
-    Biome.MOUNTAIN: 0.0,
-    Biome.SNOW: 0.0,
+# Maximum amount of food a single cell of each surface can hold. Grass grows in
+# the forest and nowhere else — sand and water feed nobody.
+SURFACE_FOOD_MAX: dict[Surface, float] = {
+    Surface.OCEAN: 0.0,
+    Surface.FRESH_WATER: 0.0,
+    Surface.SAND: 0.0,
+    Surface.FOREST: 10.0,
 }
 
 # Per-tick food regrowth multiplier (fraction of food_max regained per tick).
-BIOME_REGROW_RATE: dict[Biome, float] = {
-    Biome.DEEP_WATER: 0.0,
-    Biome.WATER: 0.0,
-    Biome.SAND: 0.01,
-    Biome.GRASS: 0.05,
-    Biome.FOREST: 0.03,
-    Biome.MOUNTAIN: 0.0,
-    Biome.SNOW: 0.0,
+SURFACE_REGROW_RATE: dict[Surface, float] = {
+    Surface.OCEAN: 0.0,
+    Surface.FRESH_WATER: 0.0,
+    Surface.SAND: 0.0,
+    Surface.FOREST: 0.05,
 }
 
-# Whether entities can enter a biome at all.
-BIOME_WALKABLE: dict[Biome, bool] = {
-    Biome.DEEP_WATER: False,
-    Biome.WATER: False,
-    Biome.SAND: True,
-    Biome.GRASS: True,
-    Biome.FOREST: True,
-    Biome.MOUNTAIN: True,
-    Biome.SNOW: True,
+# Whether entities can enter a surface at all. Animals cannot swim.
+SURFACE_WALKABLE: dict[Surface, bool] = {
+    Surface.OCEAN: False,
+    Surface.FRESH_WATER: False,
+    Surface.SAND: True,
+    Surface.FOREST: True,
 }
 
-# Movement cost multiplier per biome (higher = slower to cross). Only relevant
-# for walkable biomes.
-BIOME_MOVE_COST: dict[Biome, float] = {
-    Biome.DEEP_WATER: float("inf"),
-    Biome.WATER: float("inf"),
-    Biome.SAND: 1.2,
-    Biome.GRASS: 1.0,
-    Biome.FOREST: 1.4,
-    Biome.MOUNTAIN: 2.5,
-    Biome.SNOW: 2.0,
+# Movement cost multiplier per surface (higher = slower to cross). Only
+# relevant for walkable surfaces.
+SURFACE_MOVE_COST: dict[Surface, float] = {
+    Surface.OCEAN: float("inf"),
+    Surface.FRESH_WATER: float("inf"),
+    Surface.SAND: 1.2,
+    Surface.FOREST: 1.0,
 }
 
 

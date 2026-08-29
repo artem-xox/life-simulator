@@ -13,10 +13,10 @@ import numpy as np
 import pygame
 
 from life_simulator.config.settings import (
-    BIOME_COLORS,
     CARNIVORE_COLOR,
     HERBIVORE_COLOR,
-    Biome,
+    SURFACE_COLORS,
+    Surface,
 )
 from life_simulator.simulation.entity import Diet
 from life_simulator.simulation.world import World
@@ -26,26 +26,26 @@ if TYPE_CHECKING:
     from life_simulator.simulation.entity import Entity
 
 
-def _biome_color_table() -> np.ndarray:
-    """Return an (n_biomes, 3) uint8 array of RGB colours indexed by biome."""
-    size = max(int(b) for b in Biome) + 1
+def _surface_color_table() -> np.ndarray:
+    """Return an (n_surfaces, 3) uint8 array of RGB colours indexed by surface."""
+    size = max(int(s) for s in Surface) + 1
     table = np.zeros((size, 3), dtype=np.uint8)
-    for biome, color in BIOME_COLORS.items():
-        table[int(biome)] = color
+    for surface, color in SURFACE_COLORS.items():
+        table[int(surface)] = color
     return table
 
 
-_COLOR_TABLE = _biome_color_table()
+_COLOR_TABLE = _surface_color_table()
 
 
 def build_terrain_surface(world: World) -> pygame.Surface:
-    """Build a 1px-per-cell surface coloured by biome.
+    """Build a 1px-per-cell surface coloured by ground type.
 
     Returned surface has shape ``(width, height)`` in pixels, matching pygame's
     ``(x, y)`` surface convention.
     """
-    # world.biome is (height, width); colour-map then transpose to (width, height, 3).
-    rgb = _COLOR_TABLE[world.biome]  # (h, w, 3)
+    # world.surface is (height, width); colour-map then transpose to (width, height, 3).
+    rgb = _COLOR_TABLE[world.surface]  # (h, w, 3)
     rgb = np.transpose(rgb, (1, 0, 2))  # (w, h, 3) for make_surface
     return pygame.surfarray.make_surface(rgb)
 

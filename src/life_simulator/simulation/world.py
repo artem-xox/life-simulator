@@ -1,4 +1,4 @@
-"""The World: a grid of biomes plus a regenerating food layer.
+"""The World: a grid of surfaces plus a regenerating food layer.
 
 The world is pure data and vectorised numpy logic. It knows nothing about
 rendering. Arrays are indexed as ``[y, x]`` (row-major), matching numpy
@@ -10,46 +10,46 @@ from __future__ import annotations
 import numpy as np
 
 from life_simulator.config.settings import (
-    BIOME_FOOD_MAX,
-    BIOME_MOVE_COST,
-    BIOME_REGROW_RATE,
-    BIOME_WALKABLE,
-    Biome,
+    SURFACE_FOOD_MAX,
+    SURFACE_MOVE_COST,
+    SURFACE_REGROW_RATE,
+    SURFACE_WALKABLE,
+    Surface,
 )
 
 
-def _per_biome_lookup(mapping: dict[Biome, float]) -> np.ndarray:
-    """Build a float array indexed by biome value from a ``{Biome: value}`` dict."""
-    size = max(int(b) for b in Biome) + 1
+def _per_surface_lookup(mapping: dict[Surface, float]) -> np.ndarray:
+    """Build a float array indexed by surface value from a ``{Surface: value}`` dict."""
+    size = max(int(s) for s in Surface) + 1
     table = np.zeros(size, dtype=np.float32)
-    for biome, value in mapping.items():
-        table[int(biome)] = value
+    for surface, value in mapping.items():
+        table[int(surface)] = value
     return table
 
 
-_FOOD_MAX_TABLE = _per_biome_lookup(BIOME_FOOD_MAX)
-_REGROW_TABLE = _per_biome_lookup(BIOME_REGROW_RATE)
-_MOVE_COST_TABLE = _per_biome_lookup(BIOME_MOVE_COST)
-_WALKABLE_TABLE = _per_biome_lookup({b: float(BIOME_WALKABLE[b]) for b in Biome})
+_FOOD_MAX_TABLE = _per_surface_lookup(SURFACE_FOOD_MAX)
+_REGROW_TABLE = _per_surface_lookup(SURFACE_REGROW_RATE)
+_MOVE_COST_TABLE = _per_surface_lookup(SURFACE_MOVE_COST)
+_WALKABLE_TABLE = _per_surface_lookup({s: float(SURFACE_WALKABLE[s]) for s in Surface})
 
 
 class World:
     """A rectangular grid holding terrain and a renewable food resource.
 
     Attributes:
-        biome: int8 array of :class:`Biome` values, shape ``(height, width)``.
+        surface: int8 array of :class:`Surface` values, shape ``(height, width)``.
         food: float32 array of current food per cell.
-        food_max: float32 array of per-cell food capacity (derived from biome).
+        food_max: float32 array of per-cell food capacity (derived from surface).
     """
 
-    def __init__(self, biome: np.ndarray) -> None:
-        if biome.ndim != 2:
-            raise ValueError("biome array must be 2-dimensional (height, width)")
-        self.biome: np.ndarray = biome.astype(np.int8, copy=False)
-        self.height, self.width = self.biome.shape
+    def __init__(self, surface: np.ndarray) -> None:
+        if surface.ndim != 2:
+            raise ValueError("surface array must be 2-dimensional (height, width)")
+        self.surface: np.ndarray = surface.astype(np.int8, copy=False)
+        self.height, self.width = self.surface.shape
 
-        self.food_max: np.ndarray = _FOOD_MAX_TABLE[self.biome]
-        self._regrow: np.ndarray = _REGROW_TABLE[self.biome]
+        self.food_max: np.ndarray = _FOOD_MAX_TABLE[self.surface]
+        self._regrow: np.ndarray = _REGROW_TABLE[self.surface]
 
         # Start at 60 % of capacity so food isn't trivially abundant on tick 1.
         # This slows the initial herbivore population burst.
@@ -79,7 +79,14 @@ class World:
         return 0 <= x < self.width and 0 <= y < self.height
 
     def is_walkable(self, x: int, y: int) -> bool:
-        return bool(_WALKABLE_TABLE[self.biome[y, x]])
+        return bool(_WALKABLE_TABLE[self.surface[y, x]])
 
     def move_cost(self, x: int, y: int) -> float:
-        return float(_MOVE_COST_TABLE[self.biome[y, x]])
+        return float(_MOVE_COST_TABLE[self.surface[y, x]])
+
+    def walkable_mask(self) -> np.ndarray:
+        """Return a ``(height, width)`` bool array of cells entities may occupy.
+
+        Vectorised alternative to calling :meth:`is_walkable` per cell.
+        """
+        return _WALKABLE_TABLE[self.surface] > 0

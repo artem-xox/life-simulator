@@ -37,10 +37,10 @@ living grass layer; the app opens full-screen with the island fitted.
 | 7.2 | Island generator: warped fractal elevation × radial falloff → land mask, ocean all around | ✅ every map edge is `OCEAN`; one landmass dominates; speck islands drowned |
 | 7.3 | Lakes (water the ocean cannot reach) and a branching river network traced downhill to the ocean | ✅ lakes and rivers on the default seed; rivers reach the ocean |
 | 7.3a | Impassable mountains above a `mountain_level`, and obstacle avoidance so animals route around rock and water instead of freezing | ✅ animals aimed into rock slide around it; nothing spawns on impassable cells |
-| 7.4 | Beaches: `SAND` on land cells within noise-jittered distance of water | every waterline has a sand fringe |
+| 7.4 | Beaches: `SAND` on land cells within noise-jittered distance of water | ✅ every waterline has a sand fringe; width tunable via `shore_width` |
 | 7.5 | Grass layer: `grass` float32 on `FOREST` only; logistic regrowth + neighbour reseeding; `graze_at()` API replacing `eat_at()` | unit tests: regrowth curve, bare-cell recovery only via neighbours, no grass outside forest |
 | 7.6 | Full-screen borderless window by default (toggle + resizable kept); camera fits island on start | app opens full-screen; `F` refits |
-| 7.7 | Terrain render v2: elevation shading (`World.elevation` is already stored), grass density shading, water depth tint, shoreline edge, seeded decorative trees | grazing scars visibly change the map during a run; map reads as terrain, not flat colour blocks |
+| 7.7 | Terrain render v2: hillshading, altitude bands, grass density shading, water depth tint, shoreline surf, canopy texture | ✅ grazing scars visibly change the map during a run; map reads as terrain, not flat colour blocks |
 | 7.8 | Cleanup: delete `ui/map_screen.py`, old biome food tables, dead constants | lint clean; all tests green |
 
 ---

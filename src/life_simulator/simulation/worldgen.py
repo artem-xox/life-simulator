@@ -31,9 +31,15 @@ from life_simulator.simulation.world import World
 
 log = logging.getLogger(__name__)
 
-#: Elevation band above sea level that becomes sand, in normalised elevation
-#: units. Wider = broader beaches.
-BEACH_BAND: float = 0.02
+#: Feature size of the noise that modulates beach width, and the narrowest the
+#: shore is allowed to get as a multiple of ``shore_width``. The width swings
+#: between this factor and its mirror above 1, so a coast alternates between
+#: broad dunes and thin strips.
+BEACH_JITTER_SCALE: float = 40.0
+BEACH_WIDTH_MIN: float = 0.25
+
+#: Lake and river banks are this fraction of the open-coast beach width.
+FRESH_SHORE_RATIO: float = 0.3
 
 #: Normalised radius at which the island falloff starts biting, and the radius
 #: at which it has pulled elevation all the way to zero. Coordinates are scaled
@@ -95,6 +101,8 @@ class WorldConfig:
             floods more of the map, leaving a smaller island.
         mountain_level: elevation above which land becomes impassable rock.
             Lower values raise more mountains.
+        shore_width: how far inland sand reaches from the open coast, in cells,
+            before per-map noise widens or narrows it.
         elevation_scale: feature size of the terrain noise (larger = smoother,
             more solid island; smaller = a raggedier coastline).
         octaves: number of noise octaves summed for fractal detail.
@@ -105,6 +113,7 @@ class WorldConfig:
     height: int = 192
     water_level: float = 0.28
     mountain_level: float = 0.83
+    shore_width: float = 5.0
     elevation_scale: float = 70.0
     octaves: int = 6
 
@@ -182,12 +191,17 @@ def _stretch(field: np.ndarray) -> np.ndarray:
     return np.clip((field - lo) / (hi - lo), 0.0, 1.0)
 
 
-def _elevation_field(cfg: WorldConfig, rng: np.random.Generator) -> np.ndarray:
-    """Build the warped, island-shaped elevation field for a config."""
-    grid_x, grid_y = np.meshgrid(
+def _grid(cfg: WorldConfig) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(x, y)`` coordinate arrays of shape ``(height, width)``."""
+    return np.meshgrid(
         np.arange(cfg.width, dtype=np.float64),
         np.arange(cfg.height, dtype=np.float64),
     )
+
+
+def _elevation_field(cfg: WorldConfig, rng: np.random.Generator) -> np.ndarray:
+    """Build the warped, island-shaped elevation field for a config."""
+    grid_x, grid_y = _grid(cfg)
 
     # Sampling happens at displaced coordinates, so keep everything clear of
     # zero: the noise lattice is only defined for non-negative positions.
@@ -272,11 +286,14 @@ def _distance_to(mask: np.ndarray) -> np.ndarray:
 
 
 def _classify(elevation: np.ndarray, cfg: WorldConfig) -> np.ndarray:
-    """Turn an elevation field into a surface index array."""
+    """Split an elevation field into sea, forest and rock.
+
+    Sand is not assigned here: beaches are measured from the waterline, and the
+    lakes and rivers they also border do not exist yet at this point.
+    """
     surface = np.empty(elevation.shape, dtype=np.int8)
     surface[:] = Surface.FOREST
     surface[elevation >= cfg.mountain_level] = Surface.MOUNTAIN
-    surface[elevation < cfg.water_level + BEACH_BAND] = Surface.SAND
     surface[elevation < cfg.water_level] = Surface.OCEAN
     return surface
 
@@ -424,6 +441,37 @@ def _carve_rivers(surface: np.ndarray, elevation: np.ndarray, rng: random.Random
     return len(sources)
 
 
+def _lay_beaches(surface: np.ndarray, cfg: WorldConfig, rng: np.random.Generator) -> None:
+    """Lay sand along every waterline, in place.
+
+    Beach width is measured as distance from the water rather than as a band of
+    elevation, so the shore stays an even ribbon whether it runs along a cliff
+    or a flat. The width is modulated by its own noise field, which is what
+    gives broad dunes in one bay and a thin strip in the next instead of a
+    uniform outline traced around the island.
+
+    Lake and river banks get a narrower strip than the open coast: a full
+    ocean-width beach along every stream would cost the forest — and therefore
+    the grazing — far more than it is worth.
+    """
+    if cfg.shore_width <= 0.0:
+        return
+
+    grid_x, grid_y = _grid(cfg)
+    jitter = _stretch(_fractal_noise(rng, grid_x, grid_y, BEACH_JITTER_SCALE, 2))
+    width = cfg.shore_width * (BEACH_WIDTH_MIN + (2.0 - 2.0 * BEACH_WIDTH_MIN) * jitter)
+
+    ocean_distance = _distance_to(surface == Surface.OCEAN)
+    fresh_distance = _distance_to(surface == Surface.FRESH_WATER)
+
+    # A distance of -1 means "no such water on this map"; requiring at least 1
+    # keeps those cells out and stops an absent lake from sanding the island.
+    coast = (ocean_distance >= 1) & (ocean_distance <= width)
+    bank = (fresh_distance >= 1) & (fresh_distance <= cfg.shore_width * FRESH_SHORE_RATIO)
+
+    surface[(surface == Surface.FOREST) & (coast | bank)] = Surface.SAND
+
+
 # --- Entry point -----------------------------------------------------------
 
 
@@ -438,12 +486,14 @@ def generate(cfg: WorldConfig) -> World:
         cfg.mountain_level,
     )
 
-    elevation = _elevation_field(cfg, np.random.default_rng(cfg.seed))
+    rng = np.random.default_rng(cfg.seed)
+    elevation = _elevation_field(cfg, rng)
 
     surface = _classify(elevation, cfg)
     islands = _drop_small_islands(surface)
     lake_cells = _mark_lakes(surface)
     streams = _carve_rivers(surface, elevation, random.Random(cfg.seed))
+    _lay_beaches(surface, cfg, rng)
     log.debug("islands=%d  streams=%d  lake cells=%d", islands, streams, lake_cells)
 
     unique, counts = np.unique(surface, return_counts=True)

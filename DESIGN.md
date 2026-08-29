@@ -80,6 +80,12 @@ Deterministic from a single seed:
 5. **Rivers** — a dozen streams run downhill from the high ground by steepest
    descent. Where they converge they share a course, so a branching network
    forms and the trunks near the sea run wider than the headwaters.
+6. **Beaches** — sand is laid by distance from the waterline rather than by a
+   band of elevation, so the shore is an even ribbon whether it runs along a
+   cliff or a flat. Its width is modulated by its own noise field, giving broad
+   dunes in one bay and a thin strip in the next. Lake and river banks get a
+   narrower strip: a full-width beach along every stream would cost more
+   grazing than it is worth.
 
 Default map ≈ 320×200 cells (configurable); the window opens full-screen and
 the camera fits the island on start. Generation is pure numpy and takes tens of
@@ -292,8 +298,24 @@ surfaces, keyed by `(species, size bucket, facing, animation frame, stage)`:
 
 ### Terrain rendering
 
-- Grass density shading per cell (green → yellow → bare), water depth tint,
-  a light shoreline edge, decorative seeded tree sprites in the forest.
+The map is one pixel per cell, so colour carries all of the terrain's
+information. Cells are shaded by four things at once:
+
+- **Hillshading** from the elevation gradient, lit from the north-west. This is
+  what makes ranges read as ridges and valleys instead of flat grey patches,
+  and it gives the whole island relief.
+- **Altitude** — land brightens as it rises, and grass runs from deep lowland
+  green to pale, dry highland green.
+- **Grass density** — forest fades towards bare soil as it is grazed, so
+  grazing pressure is visible on the map with no overlay. This layer is
+  re-blended a few times a second while the simulation runs; the rest is
+  computed once per world.
+- **Water depth and surf** — the shelf around the island reads shallow and the
+  open sea deep, with a lighter line where water meets land.
+
+Rock pales towards snowy summits, on a curve steep enough to keep snow on the
+peaks rather than washing whole ranges white. A gentle per-cell canopy speckle
+keeps large areas from reading as one flat wash.
 
 ---
 

@@ -170,6 +170,52 @@ def test_inland_water_is_never_walkable() -> None:
     assert not world.walkable_mask()[world.surface == Surface.FRESH_WATER].any()
 
 
+# --- Beaches ---------------------------------------------------------------
+
+
+def _neighbours(mask: np.ndarray) -> np.ndarray:
+    """Return the cells sharing an edge with a ``True`` cell of ``mask``."""
+    near = np.zeros(mask.shape, dtype=bool)
+    near[1:, :] |= mask[:-1, :]
+    near[:-1, :] |= mask[1:, :]
+    near[:, 1:] |= mask[:, :-1]
+    near[:, :-1] |= mask[:, 1:]
+    return near
+
+
+def test_every_ocean_coast_has_sand() -> None:
+    """Land that touches the sea is beach, never bare forest."""
+    surface = _island(2026).surface
+    coastal_land = _neighbours(surface == Surface.OCEAN) & (surface == Surface.FOREST)
+    assert not coastal_land.any()
+
+
+def test_lakes_and_rivers_have_banks() -> None:
+    surface = _island(2026).surface
+    assert (_neighbours(surface == Surface.FRESH_WATER) & (surface == Surface.SAND)).any()
+
+
+def test_sand_only_appears_near_water() -> None:
+    """No stray dunes inland: every beach cell is within reach of a waterline."""
+    cfg = WorldConfig(seed=2026, width=160, height=120)
+    world = generate(cfg)
+    water = (world.surface == Surface.OCEAN) | (world.surface == Surface.FRESH_WATER)
+
+    reach = water.copy()
+    for _ in range(int(cfg.shore_width * 2) + 1):
+        reach = _neighbours(reach) | reach
+    assert not ((world.surface == Surface.SAND) & ~reach).any()
+
+
+def test_shore_width_controls_how_much_sand() -> None:
+    def sand_fraction(width: float) -> float:
+        cfg = WorldConfig(seed=2026, width=160, height=120, shore_width=width)
+        return float((generate(cfg).surface == Surface.SAND).mean())
+
+    assert sand_fraction(0.0) == 0.0
+    assert sand_fraction(8.0) > sand_fraction(3.0) > 0.0
+
+
 def test_food_grows_only_in_forest() -> None:
     world = generate(WorldConfig(seed=9, width=48, height=48))
     assert np.all(world.food_max[world.surface != Surface.FOREST] == 0.0)

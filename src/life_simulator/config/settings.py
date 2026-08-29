@@ -129,9 +129,10 @@ ATTACK_EFFICIENCY: float = 0.40
 #: fits — see ``Entity._try_reproduce``.
 #:
 #: This was once set high on purpose, to throttle breeding that had no other
-#: limit. The lifecycle's cap of two offspring per life now does that job, and
-#: keeping both brakes left populations clinging on: over six seeds, worlds
-#: surviving 15k ticks went from two to five when it was lowered to this.
+#: limit. The lifecycle's cap of two offspring per life now does that job, so a
+#: high value here brakes the population a second time: parents drop too low to
+#: survive their own young, and worlds that should persist dwindle instead.
+#: Raise it only alongside a reason the offspring cap no longer holds.
 CHILD_ENERGY_FRACTION: float = 0.35
 
 #: Fraction of its maximum energy an animal must hold before it will breed.

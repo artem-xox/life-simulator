@@ -4,15 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from life_simulator.config.settings import Surface
+from life_simulator.config.settings import ATTACK_RANGE, MAX_AGE, Surface
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
-from life_simulator.simulation.entity import (
-    ATTACK_RANGE,
-    BASE_ENERGY_COST,
-    MAX_AGE,
-    Diet,
-    Entity,
-)
+from life_simulator.simulation.entity import Diet, Entity
 from life_simulator.simulation.genome import Genome
 from life_simulator.simulation.spatial import SpatialGrid
 from life_simulator.simulation.world import World
@@ -50,14 +44,14 @@ def test_herbivore_gains_energy_from_grass() -> None:
 
     before = herb.energy
     herb.step(world, spatial)
-    # Entity spent metabolism cost but should have eaten; net change positive.
-    assert herb.energy > before - BASE_ENERGY_COST * herb.genome.metabolism * herb.genome.size
+    # It paid its upkeep but should have eaten; the net change beats upkeep alone.
+    assert herb.energy > before - herb.body.tick_cost
 
 
 def test_starving_herbivore_dies() -> None:
     world = _small_world()
     world.grass[:] = 0.0  # no grass anywhere
-    herb = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(metabolism=2.0), energy=0.01)
+    herb = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(size=2.0), energy=0.01)
     spatial = SpatialGrid()
     spatial.rebuild([herb])
     herb.step(world, spatial)
@@ -80,7 +74,7 @@ def test_reproduction_spawns_child() -> None:
     world.grass[:] = world.grass_max
     # Give the entity energy just above its reproduction threshold.
     herb = _herb(world)
-    herb.energy = herb.max_energy  # definitely above threshold
+    herb.energy = herb.body.max_energy  # definitely above threshold
     spatial = SpatialGrid()
     spatial.rebuild([herb])
     child = herb.step(world, spatial)
@@ -93,7 +87,7 @@ def test_reproduction_reduces_parent_energy() -> None:
     world = _small_world()
     world.grass[:] = 0.0
     herb = _herb(world)
-    herb.energy = herb.max_energy
+    herb.energy = herb.body.max_energy
     before = herb.energy
     spatial = SpatialGrid()
     spatial.rebuild([herb])
@@ -122,7 +116,7 @@ def test_carnivore_gains_energy_from_attack() -> None:
     spatial.rebuild([herb, carn])
     carn.step(world, spatial)
     # Carnivore attacked within range — it should have gained energy.
-    assert carn.energy > before_carn - BASE_ENERGY_COST * carn.genome.metabolism * carn.genome.size
+    assert carn.energy > before_carn - carn.body.tick_cost
 
 
 # ---------------------------------------------------------------------------
@@ -171,3 +165,49 @@ def test_determinism_same_seed() -> None:
         return eco.herbivore_count, eco.carnivore_count
 
     assert run() == run()
+
+
+# ---------------------------------------------------------------------------
+# Locomotion costs
+# ---------------------------------------------------------------------------
+
+
+def test_moving_costs_energy() -> None:
+    """Travel is charged by distance, so covering ground is never free."""
+    world = _small_world()
+    world.grass[:] = 0.0  # nothing to eat, so only costs show up
+    resting = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(speed=1.0), energy=10.0)
+    walking = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(speed=1.0), energy=10.0)
+
+    walking._move_toward(30.0, 16.0, world)
+
+    assert walking.energy < resting.energy
+    assert walking.x > 16.0
+
+
+def test_a_faster_animal_spends_more_getting_there() -> None:
+    """Speed buys arrival time, and pays for it in energy."""
+    world = _small_world()
+    slow = Entity(4.0, 16.0, Diet.HERBIVORE, Genome(speed=0.5), energy=10.0)
+    fast = Entity(4.0, 16.0, Diet.HERBIVORE, Genome(speed=2.0), energy=10.0)
+
+    for _ in range(5):
+        slow._move_toward(28.0, 16.0, world)
+        fast._move_toward(28.0, 16.0, world)
+
+    assert fast.x > slow.x  # it got further
+    assert fast.energy < slow.energy  # and it cost more
+
+
+def test_an_animal_that_cannot_move_pays_nothing() -> None:
+    """Blocked on every side, it holds still rather than burning energy in place."""
+    surface = np.full((5, 5), int(Surface.OCEAN), dtype=np.int8)
+    surface[2, 2] = int(Surface.FOREST)
+    world = World(surface)
+    stuck = Entity(2.5, 2.5, Diet.HERBIVORE, Genome(), energy=10.0)
+
+    before = stuck.energy
+    stuck._move_toward(4.0, 2.5, world)
+
+    assert stuck.energy == before
+    assert (stuck.x, stuck.y) == (2.5, 2.5)

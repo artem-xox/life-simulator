@@ -27,10 +27,10 @@ import random
 
 import pygame
 
-from life_simulator.config.settings import BACKGROUND_COLOR, SIM_SPEED_OPTIONS
+from life_simulator.config.settings import BACKGROUND_COLOR, MAX_AGE, SIM_SPEED_OPTIONS
 from life_simulator.persistence.save_load import DEFAULT_SAVE_PATH, load_game, save_game
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
-from life_simulator.simulation.entity import MAX_AGE, Diet, Entity
+from life_simulator.simulation.entity import Diet, Entity
 from life_simulator.simulation.worldgen import WorldConfig
 from life_simulator.ui.camera import Camera
 from life_simulator.ui.render import WorldRenderer, draw_entities, draw_selection, find_entity_at
@@ -60,6 +60,7 @@ _HUD_HERB = (110, 210, 80)
 _HUD_CARN = (220, 55, 35)
 _HUD_PAUSED = (240, 200, 60)
 _PANEL_BG = (10, 10, 10, 180)
+_HUD_HEADING = (150, 150, 165)
 
 
 class SimScreen(Screen):
@@ -304,25 +305,39 @@ class SimScreen(Screen):
     # --- Inspector panel --------------------------------------------------- #
 
     def _draw_inspector(self, surface: pygame.Surface) -> None:
-        e = self._selected
-        assert e is not None
-        g = e.genome
-        is_herb = e.diet == Diet.HERBIVORE
-        accent = _HUD_HERB if is_herb else _HUD_CARN
+        """Show the selected animal's genes beside the body they produced.
 
-        rows = [
-            ("age", f"{e.age} / {MAX_AGE}"),
-            ("speed", f"{g.speed:.2f}"),
-            ("vision", f"{g.vision:.1f}"),
-            ("metabolism", f"{g.metabolism:.2f}"),
-            ("size", f"{g.size:.2f}"),
-            ("repro thr", f"{g.repro_threshold:.2f}"),
-            ("mutation", f"{g.mutation_rate:.3f}"),
+        The two columns are the whole point of the genome/phenotype split: the
+        left is what the animal inherited, the right is what carrying that body
+        actually costs it. Reading them together is how a run's trade-offs stop
+        being theory.
+        """
+        entity = self._selected
+        assert entity is not None
+        gene = entity.genome
+        body = entity.body
+        accent = _HUD_HERB if entity.diet == Diet.HERBIVORE else _HUD_CARN
+
+        genes = [
+            ("size", f"{gene.size:.2f}"),
+            ("speed", f"{gene.speed:.2f}"),
+            ("stealth", f"{gene.stealth:.2f}"),
+            ("vision", f"{gene.vision:.1f}"),
+            ("social", f"{gene.sociality:.2f}"),
+            ("mutation", f"{gene.mutation_rate:.3f}"),
+        ]
+        traits = [
+            ("body", f"{body.body_size:.2f}"),
+            ("pace", f"{body.speed:.2f}"),
+            ("hidden", f"{body.stealth:.2f}"),
+            ("upkeep", f"{body.tick_cost:.2f}"),
+            ("sprint", f"{body.sprint_cost:.2f}"),
+            ("escape", f"{body.escape_power:.2f}"),
         ]
 
-        panel_w = 210
-        # title + energy bar + rows
-        panel_h = 30 + 30 + len(rows) * 22 + 12
+        panel_w = 290
+        col_w = panel_w // 2
+        panel_h = 30 + 30 + 22 + len(genes) * 20 + 30
         x = self._width - panel_w - 10
         y = 10
 
@@ -331,27 +346,32 @@ class SimScreen(Screen):
         surface.blit(panel, (x, y))
 
         cy = y + 8
-        title = e.diet.name
-        self._blit_text(surface, title, x + 12, cy, accent)
+        self._blit_text(surface, entity.diet.name, x + 12, cy, accent)
+        self._blit_text(surface, f"age {entity.age}/{MAX_AGE}", x + col_w + 12, cy, _HUD_TEXT)
         cy += 28
 
         # Energy bar.
-        frac = max(0.0, min(1.0, e.energy / e.max_energy))
+        frac = max(0.0, min(1.0, entity.energy / body.max_energy))
         bar_x, bar_w, bar_h = x + 12, panel_w - 24, 14
         pygame.draw.rect(surface, (60, 60, 70), (bar_x, cy, bar_w, bar_h))
         pygame.draw.rect(surface, accent, (bar_x, cy, int(bar_w * frac), bar_h))
         self._blit_text(
             surface,
-            f"energy {e.energy:.1f}/{e.max_energy:.0f}",
+            f"energy {entity.energy:.1f}/{body.max_energy:.0f}",
             bar_x + 4,
             cy - 1,
             _HUD_TEXT,
         )
         cy += 26
 
-        for name, value in rows:
-            self._blit_text(surface, f"{name:<11}{value}", x + 12, cy, _HUD_TEXT)
-            cy += 22
+        self._blit_text(surface, "GENES", x + 12, cy, _HUD_HEADING)
+        self._blit_text(surface, "BODY", x + col_w + 12, cy, _HUD_HEADING)
+        cy += 22
+
+        for (gene_name, gene_value), (trait_name, trait_value) in zip(genes, traits, strict=True):
+            self._blit_text(surface, f"{gene_name:<9}{gene_value}", x + 12, cy, _HUD_TEXT)
+            self._blit_text(surface, f"{trait_name:<7}{trait_value}", x + col_w + 12, cy, _HUD_TEXT)
+            cy += 20
 
     # --- Population graph -------------------------------------------------- #
 

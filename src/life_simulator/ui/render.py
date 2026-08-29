@@ -258,7 +258,7 @@ def draw_entities(
         sx, sy = camera.world_to_screen(entity.x, entity.y)
         if sx < -margin or sx > sw + margin or sy < -margin or sy > sh + margin:
             continue
-        radius = max(2, round(entity.genome.size * camera.zoom * 0.38))
+        radius = max(2, round(entity.body.body_size * camera.zoom * 0.38))
         color = HERBIVORE_COLOR if entity.diet == Diet.HERBIVORE else CARNIVORE_COLOR
         pygame.draw.circle(surface, color, (round(sx), round(sy)), radius)
 
@@ -291,5 +291,5 @@ def find_entity_at(
 def draw_selection(surface: pygame.Surface, entity: Entity, camera: Camera) -> None:
     """Draw a highlight ring around the selected entity."""
     sx, sy = camera.world_to_screen(entity.x, entity.y)
-    radius = max(4, round(entity.genome.size * camera.zoom * 0.38)) + 4
+    radius = max(4, round(entity.body.body_size * camera.zoom * 0.38)) + 4
     pygame.draw.circle(surface, (255, 230, 90), (round(sx), round(sy)), radius, 2)

@@ -87,4 +87,5 @@ disable = [
     "wrong-import-order",            # import ordering is owned by ruff (isort)
     "ungrouped-imports",             # ditto
     "too-many-instance-attributes",  # UI screens hold many widgets; _Vals is a snapshot
+    "too-few-public-methods",        # simulation objects drive off a single step()
 ]

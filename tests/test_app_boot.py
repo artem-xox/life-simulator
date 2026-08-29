@@ -79,3 +79,22 @@ def test_sim_screen_ticks_and_draws() -> None:
         screen.draw(surface)
 
     assert screen.ecosystem.tick_count > 0
+
+
+@pytest.mark.usefixtures("display")
+def test_inspector_draws_for_a_selected_animal() -> None:
+    """The genes/body panel has its own layout code; make sure it renders."""
+    from life_simulator.simulation.ecosystem import SpeciesConfig
+    from life_simulator.simulation.entity import Diet
+    from life_simulator.simulation.worldgen import WorldConfig
+    from life_simulator.ui.sim_screen import SimScreen
+
+    surface = pygame.display.set_mode((800, 600))
+    screen = SimScreen(
+        800,
+        600,
+        WorldConfig(seed=3, width=96, height=72),
+        [SpeciesConfig(Diet.HERBIVORE, 20)],
+    )
+    screen._selected = screen.ecosystem.entities[0]
+    screen.draw(surface)

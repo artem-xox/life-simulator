@@ -19,7 +19,19 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from life_simulator.config.settings import (
+    ATTACK_DAMAGE,
+    ATTACK_EFFICIENCY,
+    ATTACK_RANGE,
+    CHILD_ENERGY_FRACTION,
+    GRAZE_AMOUNT,
+    GRAZE_ENERGY_GAIN,
+    MAX_AGE,
+    REPRODUCTION_THRESHOLD,
+    WANDER_INTERVAL,
+)
 from life_simulator.simulation.genome import Genome
+from life_simulator.simulation.phenotype import Phenotype
 
 if TYPE_CHECKING:
     from life_simulator.simulation.spatial import SpatialGrid
@@ -34,44 +46,6 @@ class Diet(IntEnum):
     HERBIVORE = 0
     CARNIVORE = 1
 
-
-# ---------------------------------------------------------------------------
-# Balance constants — centralised here so they are easy to tune in one place
-# ---------------------------------------------------------------------------
-
-#: Base energy spent per tick before genome modifiers.
-BASE_ENERGY_COST: float = 0.30
-
-#: Max energy a size-1 entity can hold.
-MAX_ENERGY_BASE: float = 20.0
-
-#: Grass consumed from the cell per grazing action (herbivores).
-GRAZE_AMOUNT: float = 2.0
-
-#: Energy gained per unit of grass eaten. Deliberately low: with abundant grass
-#: an herbivore net-gains ~0.5 energy/tick, making reproduction take ~25 ticks
-#: rather than every 2-3 ticks.
-GRAZE_ENERGY_GAIN: float = 0.40
-
-#: Energy stolen from prey per tick while within ATTACK_RANGE (carnivores).
-#: Low value forces several ticks of sustained contact to drain a prey's energy.
-ATTACK_DAMAGE: float = 1.8
-
-#: Distance in cells within which a carnivore can attack.
-ATTACK_RANGE: float = 1.5
-
-#: Fraction of energy stolen from prey that the attacker keeps.
-ATTACK_EFFICIENCY: float = 0.40
-
-#: Energy given to the newborn as a fraction of parent max_energy.
-#: High value (> 0.5) makes reproduction expensive to slow population growth.
-CHILD_ENERGY_FRACTION: float = 0.65
-
-#: Hard upper limit on age in ticks.
-MAX_AGE: int = 700
-
-#: Ticks between choosing a new random wander target.
-WANDER_INTERVAL: int = 10
 
 #: Headings an entity tries, in order, when its direct path is blocked by water
 #: or rock. Turning aside rather than stopping lets it slide along an obstacle
@@ -103,6 +77,8 @@ class Entity:
         alive: False after the entity has died (natural or predation).
         diet: HERBIVORE or CARNIVORE — determines feeding behaviour.
         genome: heritable traits; passed (with mutation) to offspring.
+        body: the abilities those genes yield — speed, upkeep, reserves and
+            concealment, all derived with the trade-offs of carrying a body.
     """
 
     __slots__ = (
@@ -113,6 +89,7 @@ class Entity:
         "alive",
         "diet",
         "genome",
+        "body",
         "_target_x",
         "_target_y",
         "_wander_timer",
@@ -131,21 +108,16 @@ class Entity:
         self.y = y
         self.diet = diet
         self.genome = genome
+        self.body = Phenotype.of(genome)
         self.age: int = 0
         self.alive: bool = True
-        self.energy: float = energy if energy is not None else self.max_energy * 0.4
+        self.energy: float = energy if energy is not None else self.body.max_energy * 0.4
         # Navigation state.
         self._target_x: float = x
         self._target_y: float = y
         self._wander_timer: int = 0
         # Which way this individual prefers to turn around an obstacle.
         self._turn_bias: float = 1.0 if random.random() < 0.5 else -1.0
-
-    # --- Derived stats ----------------------------------------------------- #
-
-    @property
-    def max_energy(self) -> float:
-        return MAX_ENERGY_BASE * self.genome.size
 
     # --- Main update ------------------------------------------------------- #
 
@@ -156,8 +128,7 @@ class Entity:
             A newly born child entity, or ``None``.
         """
         self.age += 1
-        # Cost scales with both metabolism and size (bigger body = more upkeep).
-        self.energy -= BASE_ENERGY_COST * self.genome.metabolism * self.genome.size
+        self.energy -= self.body.tick_cost
 
         if self.energy <= 0.0 or self.age > MAX_AGE:
             self.alive = False
@@ -182,7 +153,7 @@ class Entity:
         cx, cy = int(self.x), int(self.y)
         if world.in_bounds(cx, cy):
             eaten = world.graze_at(cx, cy, GRAZE_AMOUNT)
-            self.energy = min(self.max_energy, self.energy + eaten * GRAZE_ENERGY_GAIN)
+            self.energy = min(self.body.max_energy, self.energy + eaten * GRAZE_ENERGY_GAIN)
 
     def _find_grass_target(self, world: World) -> tuple[float, float] | None:
         """Return the position of the richest grass cell in vision, or None."""
@@ -224,13 +195,13 @@ class Entity:
 
     def _attack(self, prey: Entity) -> None:
         # Relative size affects how much damage is dealt vs. absorbed.
-        size_ratio = self.genome.size / max(prey.genome.size, 0.1)
+        size_ratio = self.body.body_size / max(prey.body.body_size, 0.1)
         damage = ATTACK_DAMAGE * min(size_ratio, 2.0)
         stolen = min(prey.energy, damage)
         prey.energy -= stolen
         if prey.energy <= 0.0:
             prey.alive = False
-        self.energy = min(self.max_energy, self.energy + stolen * ATTACK_EFFICIENCY)
+        self.energy = min(self.body.max_energy, self.energy + stolen * ATTACK_EFFICIENCY)
 
     # --- Shared movement --------------------------------------------------- #
 
@@ -245,7 +216,7 @@ class Entity:
         cx = max(0, min(world.width - 1, int(self.x)))
         cy = max(0, min(world.height - 1, int(self.y)))
         cost = world.move_cost(cx, cy)
-        step = min(self.genome.speed / cost, dist)
+        step = min(self.body.speed / cost, dist)
         heading = math.atan2(dy, dx)
 
         for deflection in _AVOID_DEFLECTIONS:
@@ -256,6 +227,7 @@ class Entity:
             nx = max(0.0, min(world.width - 1e-6, nx))
             ny = max(0.0, min(world.height - 1e-6, ny))
             if world.is_walkable(int(nx), int(ny)):
+                self.energy -= self.body.travel_cost * math.hypot(nx - self.x, ny - self.y)
                 self.x, self.y = nx, ny
                 return
 
@@ -279,9 +251,9 @@ class Entity:
     # --- Reproduction ------------------------------------------------------ #
 
     def _try_reproduce(self, world: World) -> Entity | None:
-        if self.energy < self.genome.repro_threshold * self.max_energy:
+        if self.energy < REPRODUCTION_THRESHOLD * self.body.max_energy:
             return None
-        child_energy = CHILD_ENERGY_FRACTION * self.max_energy
+        child_energy = CHILD_ENERGY_FRACTION * self.body.max_energy
         self.energy -= child_energy
         cx, cy = self._birth_spot(world)
         return Entity(cx, cy, self.diet, self.genome.mutate(), child_energy)

@@ -9,7 +9,7 @@ the roadmap: stages, tickets, and acceptance criteria.
 |---|-------|-------------|--------|
 | 0–6 | **v1** | world gen, entities, asexual evolution, setup screen, stats, save/load | ✅ done |
 | 7 | Map 2.0 | island with rivers/lakes/beaches/mountains, grass layer, full-screen | ✅ done |
-| 8 | Genome 2.0 | new gene set, phenotype trade-offs, crossover | ⬜ todo |
+| 8 | Genome 2.0 | new gene set, phenotype trade-offs, crossover | ✅ done |
 | 9 | Lifecycle | juveniles, 1–2 births per life, death causes | ⬜ todo |
 | 10 | Behaviour | state machines, stealth detection, chase & escape | ⬜ todo |
 | 11 | Mating & social | sexual selection, courtship, families, herds | ⬜ todo |
@@ -52,11 +52,11 @@ Goal: the new gene set with physical trade-offs and two-parent crossover
 
 | Ticket | Description | Acceptance |
 |---|---|---|
-| 8.1 | New `Genome`: `size`, `speed`, `stealth`, `vision`, `sociality`, `mutation_rate` with bounds; drop `metabolism`, `repro_threshold` | mutate/copy work; bounds respected |
-| 8.2 | `Phenotype` layer: `max_energy`, `tick_cost` (Kleiber), `eff_speed`, `sprint_cost`, `eff_stealth`, `escape_power` per DESIGN formulas | tests assert trade-off directions (bigger ⇒ slower, more max energy, higher cost, less stealth) |
-| 8.3 | `Genome.crossover(other)`: uniform per-gene pick + one mutation pass | tests: child genes come from a parent ± mutation noise; distribution sanity |
-| 8.4 | Wire phenotype into `Entity` (movement cost, energy cap); update `SpeciesConfig` and setup-screen sliders to the new genes | sim runs on new genome end-to-end |
-| 8.5 | Inspector shows genes and derived phenotype side by side | click an animal → both columns visible |
+| 8.1 | New `Genome`: `size`, `speed`, `stealth`, `vision`, `sociality`, `mutation_rate` with bounds; drop `metabolism`, `repro_threshold` | ✅ mutate/copy work; bounds respected |
+| 8.2 | `Phenotype` layer: `max_energy`, `tick_cost` (Kleiber), `speed`, `travel_cost`, `sprint_cost`, `stealth`, `escape_power` | ✅ tests assert trade-off directions (bigger ⇒ slower, more max energy, higher cost, less stealth) |
+| 8.3 | `Genome.crossover(other)`: uniform per-gene pick + one mutation pass | ✅ child genes come from a parent ± mutation noise; variation preserved |
+| 8.4 | Wire phenotype into `Entity` (movement cost, energy cap); update `SpeciesConfig` and setup-screen sliders to the new genes | ✅ sim runs on new genome end-to-end |
+| 8.5 | Inspector shows genes and derived phenotype side by side | ✅ click an animal → both columns visible |
 
 ---
 

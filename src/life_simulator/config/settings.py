@@ -98,6 +98,78 @@ SURFACE_MOVE_COST: dict[Surface, float] = {
 }
 
 
+# --- Creature energy budget -------------------------------------------------
+
+#: Energy a size-1 body burns per tick simply staying alive.
+BASE_ENERGY_COST: float = 0.30
+
+#: Energy a size-1 body can hold.
+MAX_ENERGY_BASE: float = 20.0
+
+#: Grass consumed from the cell per grazing action (herbivores).
+GRAZE_AMOUNT: float = 2.0
+
+#: Energy gained per unit of grass eaten. Deliberately low: with abundant grass
+#: an herbivore net-gains ~0.5 energy/tick, making reproduction take ~25 ticks
+#: rather than every 2-3 ticks.
+GRAZE_ENERGY_GAIN: float = 0.40
+
+#: Energy stolen from prey per tick while within ATTACK_RANGE (carnivores).
+#: Low value forces several ticks of sustained contact to drain a prey's energy.
+ATTACK_DAMAGE: float = 1.8
+
+#: Distance in cells within which a carnivore can attack.
+ATTACK_RANGE: float = 1.5
+
+#: Fraction of energy stolen from prey that the attacker keeps.
+ATTACK_EFFICIENCY: float = 0.40
+
+#: Energy given to the newborn as a fraction of parent max_energy.
+#: High value (> 0.5) makes reproduction expensive to slow population growth.
+CHILD_ENERGY_FRACTION: float = 0.65
+
+#: Fraction of its maximum energy an animal must hold before it will breed.
+#: A placeholder for the fertility rules of the lifecycle stage.
+REPRODUCTION_THRESHOLD: float = 0.78
+
+#: Hard upper limit on age in ticks.
+MAX_AGE: int = 700
+
+#: Ticks between choosing a new random wander target.
+WANDER_INTERVAL: int = 10
+
+
+# --- Phenotype: how genes become abilities ----------------------------------
+# Exponents that turn body size into real-world consequences. Every one of them
+# is a trade-off, which is what stops any single gene from being simply better
+# than its alternatives.
+
+#: Energy storage grows faster than mass — big animals bank a deep reserve.
+ENERGY_SIZE_EXPONENT: float = 1.2
+
+#: Kleiber's law. Upkeep grows *slower* than mass, so a large body is more
+#: efficient per unit of itself while still costing more in absolute terms.
+METABOLIC_SIZE_EXPONENT: float = 0.75
+
+#: Mass drags: pace falls off as size rises.
+SPEED_SIZE_EXPONENT: float = 0.4
+
+#: Energy a size-1 body spends per cell it travels. Locomotion is charged by
+#: distance, not by time: a fast animal reaches food sooner but burns more
+#: getting there, which is what stops speed from being a free gene.
+TRAVEL_ENERGY_FACTOR: float = 0.12
+
+#: Sprinting costs this multiple of upkeep, times the square of speed — running
+#: fast is punishingly expensive, and running fast while heavy more so.
+SPRINT_COST_FACTOR: float = 3.0
+
+#: Concealment lost per unit of size above 1. Bulk is hard to hide.
+STEALTH_SIZE_PENALTY: float = 0.35
+
+#: Nothing is ever wholly invisible.
+MAX_STEALTH: float = 0.95
+
+
 # --- Terrain shading --------------------------------------------------------
 # The map is drawn one pixel per cell, so colour is the only channel terrain
 # has. These endpoints are interpolated across elevation, depth and how much

@@ -32,6 +32,27 @@ _WORLD_COLOR: tuple[int, int, int] = (185, 160, 255)
 _HINT_COLOR: tuple[int, int, int] = (110, 110, 125)
 
 
+#: The genes a species starts with, in the order they appear on screen.
+#: (attribute, slider min, slider max, step, display format)
+_GENE_ROWS: tuple[tuple[str, float, float, float, object], ...] = (
+    ("size", 0.5, 2.5, 0.05, lambda x: f"{x:.2f}"),
+    ("speed", 0.5, 2.0, 0.05, lambda x: f"{x:.2f}"),
+    ("stealth", 0.0, 1.0, 0.05, lambda x: f"{x:.2f}"),
+    ("vision", 3.0, 14.0, 0.5, lambda x: f"{x:.1f}"),
+    ("social", 0.0, 1.0, 0.05, lambda x: f"{x:.2f}"),
+    ("mut", 0.005, 0.25, 0.005, lambda x: f"{x:.3f}"),
+)
+
+_GENE_LABELS: dict[str, str] = {
+    "size": "Size",
+    "speed": "Speed",
+    "stealth": "Stealth",
+    "vision": "Vision (cells)",
+    "social": "Sociality",
+    "mut": "Mutation rate",
+}
+
+
 # ---- value snapshot ---------------------------------------------------------
 
 
@@ -48,16 +69,18 @@ class _Vals:
     map_w: int = 640
     map_h: int = 400
     h_count: int = 150
+    h_size: float = 1.0
     h_speed: float = 1.0
+    h_stealth: float = 0.4
     h_vision: float = 5.0
-    h_meta: float = 0.9
-    h_repro: float = 0.78
+    h_social: float = 0.6
     h_mut: float = 0.05
     c_count: int = 15
+    c_size: float = 1.3
     c_speed: float = 1.5
+    c_stealth: float = 0.5
     c_vision: float = 9.0
-    c_meta: float = 1.1
-    c_repro: float = 0.80
+    c_social: float = 0.3
     c_mut: float = 0.05
 
 
@@ -94,16 +117,18 @@ class SetupScreen(Screen):
         self._s_map_w: UIHorizontalSlider
         self._s_map_h: UIHorizontalSlider
         self._s_h_count: UIHorizontalSlider
+        self._s_h_size: UIHorizontalSlider
         self._s_h_speed: UIHorizontalSlider
+        self._s_h_stealth: UIHorizontalSlider
         self._s_h_vision: UIHorizontalSlider
-        self._s_h_meta: UIHorizontalSlider
-        self._s_h_repro: UIHorizontalSlider
+        self._s_h_social: UIHorizontalSlider
         self._s_h_mut: UIHorizontalSlider
         self._s_c_count: UIHorizontalSlider
+        self._s_c_size: UIHorizontalSlider
         self._s_c_speed: UIHorizontalSlider
+        self._s_c_stealth: UIHorizontalSlider
         self._s_c_vision: UIHorizontalSlider
-        self._s_c_meta: UIHorizontalSlider
-        self._s_c_repro: UIHorizontalSlider
+        self._s_c_social: UIHorizontalSlider
         self._s_c_mut: UIHorizontalSlider
 
         self._load_requested = False
@@ -166,44 +191,41 @@ class SetupScreen(Screen):
             0, 3, "Map height (cells)", float(v.map_h), 150, 750, 25, lambda x: f"{round(x)}"
         )
 
-        # ---- herbivore column (col 1, rows 0-4) -----------------------------
-        self._s_h_count = add_slider(
-            1, 0, "Count", float(v.h_count), 10, 400, 10, lambda x: f"{round(x)}"
-        )
-        self._s_h_speed = add_slider(1, 1, "Speed", v.h_speed, 0.3, 3.0, 0.1, lambda x: f"{x:.1f}")
-        self._s_h_vision = add_slider(
-            1, 2, "Vision (cells)", v.h_vision, 2.0, 15.0, 0.5, lambda x: f"{x:.1f}"
-        )
-        self._s_h_meta = add_slider(
-            1, 3, "Metabolism", v.h_meta, 0.5, 2.0, 0.05, lambda x: f"{x:.2f}"
-        )
-        self._s_h_repro = add_slider(
-            1, 4, "Repro threshold", v.h_repro, 0.40, 0.90, 0.01, lambda x: f"{x:.2f}"
-        )
-        self._s_h_mut = add_slider(
-            1, 5, "Mutation rate", v.h_mut, 0.005, 0.30, 0.005, lambda x: f"{x:.3f}"
-        )
-
-        # ---- carnivore column (col 2, rows 0-4) -----------------------------
-        self._s_c_count = add_slider(
-            2, 0, "Count", float(v.c_count), 1, 100, 1, lambda x: f"{round(x)}"
-        )
-        self._s_c_speed = add_slider(2, 1, "Speed", v.c_speed, 0.3, 3.0, 0.1, lambda x: f"{x:.1f}")
-        self._s_c_vision = add_slider(
-            2, 2, "Vision (cells)", v.c_vision, 2.0, 15.0, 0.5, lambda x: f"{x:.1f}"
-        )
-        self._s_c_meta = add_slider(
-            2, 3, "Metabolism", v.c_meta, 0.5, 2.0, 0.05, lambda x: f"{x:.2f}"
-        )
-        self._s_c_repro = add_slider(
-            2, 4, "Repro threshold", v.c_repro, 0.40, 0.90, 0.01, lambda x: f"{x:.2f}"
-        )
-        self._s_c_mut = add_slider(
-            2, 5, "Mutation rate", v.c_mut, 0.005, 0.30, 0.005, lambda x: f"{x:.3f}"
-        )
+        # ---- species columns (col 1 = herbivores, col 2 = carnivores) -------
+        for col, prefix, vals in ((1, "h", v), (2, "c", v)):
+            count_hi = 400 if prefix == "h" else 150
+            setattr(
+                self,
+                f"_s_{prefix}_count",
+                add_slider(
+                    col,
+                    0,
+                    "Count",
+                    float(getattr(vals, f"{prefix}_count")),
+                    1,
+                    count_hi,
+                    1,
+                    lambda x: f"{round(x)}",
+                ),
+            )
+            for row, (gene, low, high, step, fmt) in enumerate(_GENE_ROWS, start=1):
+                setattr(
+                    self,
+                    f"_s_{prefix}_{gene}",
+                    add_slider(
+                        col,
+                        row,
+                        _GENE_LABELS[gene],
+                        getattr(vals, f"{prefix}_{gene}"),
+                        low,
+                        high,
+                        step,
+                        fmt,
+                    ),
+                )
 
         # ---- start / load buttons -------------------------------------------
-        btn_y = y0 + 6 * row_h + 16
+        btn_y = y0 + 7 * row_h + 16
         btn_w, btn_h = 240, 48
         cx = self._w // 2
         self._start_btn = UIButton(
@@ -229,18 +251,15 @@ class SetupScreen(Screen):
         v.water = self._s_water.get_current_value()
         v.map_w = round(self._s_map_w.get_current_value())
         v.map_h = round(self._s_map_h.get_current_value())
-        v.h_count = round(self._s_h_count.get_current_value())
-        v.h_speed = self._s_h_speed.get_current_value()
-        v.h_vision = self._s_h_vision.get_current_value()
-        v.h_meta = self._s_h_meta.get_current_value()
-        v.h_repro = self._s_h_repro.get_current_value()
-        v.h_mut = self._s_h_mut.get_current_value()
-        v.c_count = round(self._s_c_count.get_current_value())
-        v.c_speed = self._s_c_speed.get_current_value()
-        v.c_vision = self._s_c_vision.get_current_value()
-        v.c_meta = self._s_c_meta.get_current_value()
-        v.c_repro = self._s_c_repro.get_current_value()
-        v.c_mut = self._s_c_mut.get_current_value()
+        for prefix in ("h", "c"):
+            setattr(
+                v,
+                f"{prefix}_count",
+                round(getattr(self, f"_s_{prefix}_count").get_current_value()),
+            )
+            for gene, *_ in _GENE_ROWS:
+                slider = getattr(self, f"_s_{prefix}_{gene}")
+                setattr(v, f"{prefix}_{gene}", slider.get_current_value())
 
     # ---- Screen protocol ----------------------------------------------------
 
@@ -318,28 +337,8 @@ class SetupScreen(Screen):
             water_level=round(v.water, 2),
         )
         species: list[SpeciesConfig] = [
-            SpeciesConfig(
-                diet=Diet.HERBIVORE,
-                count=v.h_count,
-                genome=Genome(
-                    speed=round(v.h_speed, 2),
-                    vision=round(v.h_vision, 1),
-                    metabolism=round(v.h_meta, 2),
-                    repro_threshold=round(v.h_repro, 2),
-                    mutation_rate=round(v.h_mut, 3),
-                ),
-            ),
-            SpeciesConfig(
-                diet=Diet.CARNIVORE,
-                count=v.c_count,
-                genome=Genome(
-                    speed=round(v.c_speed, 2),
-                    vision=round(v.c_vision, 1),
-                    metabolism=round(v.c_meta, 2),
-                    repro_threshold=round(v.c_repro, 2),
-                    mutation_rate=round(v.c_mut, 3),
-                ),
-            ),
+            SpeciesConfig(diet=Diet.HERBIVORE, count=v.h_count, genome=self._genome_of("h")),
+            SpeciesConfig(diet=Diet.CARNIVORE, count=v.c_count, genome=self._genome_of("c")),
         ]
         log.info(
             "launching sim  seed=%d  world=%dx%d  herb=%d  carn=%d",
@@ -350,6 +349,18 @@ class SetupScreen(Screen):
             v.c_count,
         )
         return SimScreen(self._w, self._h, world_cfg, species)
+
+    def _genome_of(self, prefix: str) -> Genome:
+        """Build the starting genome for one species from its slider values."""
+        v = self._vals
+        return Genome(
+            size=round(getattr(v, f"{prefix}_size"), 2),
+            speed=round(getattr(v, f"{prefix}_speed"), 2),
+            stealth=round(getattr(v, f"{prefix}_stealth"), 2),
+            vision=round(getattr(v, f"{prefix}_vision"), 1),
+            sociality=round(getattr(v, f"{prefix}_social"), 2),
+            mutation_rate=round(getattr(v, f"{prefix}_mut"), 3),
+        )
 
     def _load_sim(self) -> Screen | None:
         """Load the default save file and jump straight into the simulation."""

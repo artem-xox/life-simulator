@@ -13,8 +13,9 @@ See [DESIGN.md](DESIGN.md) for the design and [PLAN.md](PLAN.md) for the roadmap
 |-------|-------------|-------|
 | 0–6 | v1: world, entities, asexual evolution, setup screen, stats, save/load | ✅ done |
 | 7 | Map 2.0: island with rivers, lakes, beaches and mountains; grass layer; full-screen | ✅ done |
-| 8 | Genome 2.0: new gene set, phenotype trade-offs, crossover | ⬜ next |
-| 9–14 | Lifecycle, behaviour, mating, sprites, analytics, balance | ⬜ todo |
+| 8 | Genome 2.0: new gene set, phenotype trade-offs, crossover | ✅ done |
+| 9 | Lifecycle: juveniles, limited breeding, causes of death | ⬜ next |
+| 10–14 | Behaviour, mating, sprites, analytics, balance | ⬜ todo |
 
 ## The world
 
@@ -121,7 +122,8 @@ src/life_simulator/
   simulation/
     world.py          World: surface + elevation + grass, logistic regrowth
     worldgen.py       WorldConfig, generate() → island from vectorised Perlin
-    genome.py         Genome dataclass with Gaussian mutate()
+    genome.py         Genome: six genes, Gaussian mutate(), crossover()
+    phenotype.py      Phenotype: genes → abilities, with physical trade-offs
     entity.py         Entity behaviour loop (move, graze, attack, reproduce)
     ecosystem.py      Ecosystem: tick(), spawn, ENTITY_CAP, Stats sampling
     spatial.py        SpatialGrid: hash buckets for O(k) neighbour queries

@@ -139,19 +139,32 @@ Genes are independent; the **phenotype** derives effective stats with
 physical trade-offs, so correlations emerge the way they do in nature:
 
 ```
-max_energy   = E_BASE · size^1.2          # big bodies store more
-tick_cost    = C_BASE · size^0.75         # Kleiber's law: big is efficient per kg,
+body_size    = size · growth              # juveniles carry the same genes small
+max_energy   = E_BASE · body^1.2          # big bodies store more
+tick_cost    = C_BASE · body^0.75         # Kleiber's law: big is efficient per kg,
                                           # but expensive in absolute terms
-eff_speed    = speed / size^0.4           # big is slower
-sprint_cost  = tick_cost · SPRINT_K · eff_speed^2   # sprinting burns quadratically
-eff_stealth  = clamp(stealth − S_K · (size − 1), 0, 0.95)  # big is conspicuous
-escape_power = size                       # big prey breaks free more often
+speed        = gene_speed / body^0.4      # mass drags
+travel_cost  = T_BASE · body^0.75         # charged per cell moved, so pace is
+                                          # paid for in energy, not just in time
+sprint_cost  = tick_cost · SPRINT_K · speed^2   # sprinting burns quadratically
+stealth      = clamp(gene_stealth − S_K · (body − 1), 0, 0.95)  # bulk is conspicuous
+escape_power = body                       # big prey breaks free more often
 ```
 
 Consequences the player should observe, not be told: a lineage drifting toward
-large size needs richer grass patches, gets caught less by starvation of
-predators but more by them noticing it; a stealth build trends small and
-starves less from chases; speed builds pay for it in energy.
+large size banks a deeper reserve and endures longer between meals, but pays
+for it in pace, in concealment, and in the absolute cost of upkeep; a small
+build is quick, cheap and hard to see, but starves within a few unlucky ticks
+and cannot tear free of anything.
+
+The inspector shows a selected animal's genes beside the body they produced, so
+these trade-offs are readable in a running world rather than only on paper.
+
+Note that a trade-off only bites when the environment charges for it. Under
+unlimited breeding, generation time swamps every other term — small bodies win
+simply because they reach the breeding threshold sooner — so the trade-off web
+does not really come into play until the lifecycle stage caps offspring per
+life and makes *surviving to breed* the thing selection acts on.
 
 Constants (`E_BASE`, `C_BASE`, exponents…) live in `config/settings.py` and are
 tuned in the balance stage.
@@ -231,8 +244,8 @@ and the inspector.
 Both directions are asymmetric and gene-driven:
 
 ```
-predator detects prey at range:  pred.vision · (1 − prey.eff_stealth)
-prey detects predator at range:  prey.vision · (1 − pred.eff_stealth)
+predator detects prey at range:  pred.vision · (1 − prey.stealth)
+prey detects predator at range:  prey.vision · (1 − pred.stealth)
 ```
 
 A stealthy predator gets closer before the prey bolts; stealthy prey is simply

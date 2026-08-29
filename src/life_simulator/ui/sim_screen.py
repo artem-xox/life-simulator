@@ -48,6 +48,10 @@ _CLICK_TOLERANCE = 4
 # Seconds a transient status message (e.g. "Saved") stays on screen.
 _MESSAGE_DURATION = 2.5
 
+# Seconds between rebuilds of the terrain colours. Grass changes slowly enough
+# that redrawing it every frame would be wasted work.
+_TERRAIN_REFRESH_INTERVAL = 0.4
+
 # Colours used in the HUD / panels.
 _HUD_TEXT = (230, 230, 230)
 _HUD_SHADOW = (0, 0, 0)
@@ -102,6 +106,7 @@ class SimScreen(Screen):
         self._show_graph = True
         self._message: str = ""
         self._message_timer: float = 0.0
+        self._terrain_timer: float = 0.0
         self._next_screen: Screen | None = None
         self._font = pygame.font.SysFont("menlo,consolas,monospace", 16)
         self._font_large = pygame.font.SysFont("menlo,consolas,monospace", 20)
@@ -224,6 +229,11 @@ class SimScreen(Screen):
                 self.ecosystem.tick()
                 self._accumulator -= step
                 steps += 1
+
+            self._terrain_timer += dt
+            if self._terrain_timer >= _TERRAIN_REFRESH_INTERVAL:
+                self._terrain_timer = 0.0
+                self._renderer.refresh()
         return None
 
     def draw(self, surface: pygame.Surface) -> None:

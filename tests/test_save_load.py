@@ -70,5 +70,5 @@ def test_loaded_world_terrain_is_reproducible(tmp_path) -> None:
 
     loaded, _, _ = load_game(path)
 
-    # Terrain is regenerated from the seed, so biomes must match exactly.
-    assert np.array_equal(loaded.world.biome, eco.world.biome)
+    # Terrain is regenerated from the seed, so surfaces must match exactly.
+    assert np.array_equal(loaded.world.surface, eco.world.surface)

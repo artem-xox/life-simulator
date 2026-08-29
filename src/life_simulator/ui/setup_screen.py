@@ -45,7 +45,6 @@ class _Vals:
 
     seed: int = 2026
     water: float = 0.40
-    climate: float = 0.10
     map_w: int = 160
     map_h: int = 120
     h_count: int = 150
@@ -92,7 +91,6 @@ class SetupScreen(Screen):
         self._start_btn: UIButton
         self._load_btn: UIButton
         self._s_water: UIHorizontalSlider
-        self._s_climate: UIHorizontalSlider
         self._s_map_w: UIHorizontalSlider
         self._s_map_h: UIHorizontalSlider
         self._s_h_count: UIHorizontalSlider
@@ -157,18 +155,15 @@ class SetupScreen(Screen):
         self._seed_entry.set_text(str(v.seed))
         self._rnd_btn = UIButton(r(cols[0] + col_w - 65, y0, 65, 28), "Random", mgr)
 
-        # ---- world column (col 0, rows 1-4) ---------------------------------
+        # ---- world column (col 0, rows 1-3) ---------------------------------
         self._s_water = add_slider(
             0, 1, "Water level", v.water, 0.20, 0.70, 0.01, lambda x: f"{x:.2f}"
         )
-        self._s_climate = add_slider(
-            0, 2, "Climate (dry/wet)", v.climate, -1.0, 1.0, 0.05, lambda x: f"{x:+.2f}"
-        )
         self._s_map_w = add_slider(
-            0, 3, "Map width (cells)", float(v.map_w), 80, 320, 16, lambda x: f"{round(x)}"
+            0, 2, "Map width (cells)", float(v.map_w), 80, 320, 16, lambda x: f"{round(x)}"
         )
         self._s_map_h = add_slider(
-            0, 4, "Map height (cells)", float(v.map_h), 60, 240, 12, lambda x: f"{round(x)}"
+            0, 3, "Map height (cells)", float(v.map_h), 60, 240, 12, lambda x: f"{round(x)}"
         )
 
         # ---- herbivore column (col 1, rows 0-4) -----------------------------
@@ -232,7 +227,6 @@ class SetupScreen(Screen):
         except (ValueError, AttributeError):
             pass
         v.water = self._s_water.get_current_value()
-        v.climate = self._s_climate.get_current_value()
         v.map_w = round(self._s_map_w.get_current_value())
         v.map_h = round(self._s_map_h.get_current_value())
         v.h_count = round(self._s_h_count.get_current_value())
@@ -322,7 +316,6 @@ class SetupScreen(Screen):
             width=v.map_w,
             height=v.map_h,
             water_level=round(v.water, 2),
-            climate=round(v.climate, 2),
         )
         species: list[SpeciesConfig] = [
             SpeciesConfig(

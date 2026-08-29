@@ -73,6 +73,20 @@ MAX_AGE: int = 700
 #: Ticks between choosing a new random wander target.
 WANDER_INTERVAL: int = 10
 
+#: Headings an entity tries, in order, when its direct path is blocked by water
+#: or rock. Turning aside rather than stopping lets it slide along an obstacle
+#: and work its way around. Each entity mirrors this list (see ``_turn_bias``)
+#: so a herd meeting a mountain splits around both sides instead of piling up.
+_AVOID_DEFLECTIONS: tuple[float, ...] = (
+    0.0,
+    math.pi / 4,
+    -math.pi / 4,
+    math.pi / 2,
+    -math.pi / 2,
+    3 * math.pi / 4,
+    -3 * math.pi / 4,
+)
+
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -102,6 +116,7 @@ class Entity:
         "_target_x",
         "_target_y",
         "_wander_timer",
+        "_turn_bias",
     )
 
     def __init__(
@@ -123,6 +138,8 @@ class Entity:
         self._target_x: float = x
         self._target_y: float = y
         self._wander_timer: int = 0
+        # Which way this individual prefers to turn around an obstacle.
+        self._turn_bias: float = 1.0 if random.random() < 0.5 else -1.0
 
     # --- Derived stats ----------------------------------------------------- #
 
@@ -151,7 +168,7 @@ class Entity:
         else:
             self._step_carnivore(world, spatial)
 
-        return self._try_reproduce()
+        return self._try_reproduce(world)
 
     # --- Herbivore behaviour ----------------------------------------------- #
 
@@ -218,6 +235,7 @@ class Entity:
     # --- Shared movement --------------------------------------------------- #
 
     def _move_toward(self, tx: float, ty: float, world: World) -> None:
+        """Step towards a target, turning aside if water or rock is in the way."""
         dx = tx - self.x
         dy = ty - self.y
         dist = math.hypot(dx, dy)
@@ -228,14 +246,18 @@ class Entity:
         cy = max(0, min(world.height - 1, int(self.y)))
         cost = world.move_cost(cx, cy)
         step = min(self.genome.speed / cost, dist)
-        nx = self.x + dx / dist * step
-        ny = self.y + dy / dist * step
-        # Keep position strictly inside world bounds so int(pos) is always valid.
-        nx = max(0.0, min(world.width - 1e-6, nx))
-        ny = max(0.0, min(world.height - 1e-6, ny))
-        inx, iny = int(nx), int(ny)
-        if world.is_walkable(inx, iny):
-            self.x, self.y = nx, ny
+        heading = math.atan2(dy, dx)
+
+        for deflection in _AVOID_DEFLECTIONS:
+            angle = heading + deflection * self._turn_bias
+            nx = self.x + math.cos(angle) * step
+            ny = self.y + math.sin(angle) * step
+            # Keep position strictly inside world bounds so int(pos) is always valid.
+            nx = max(0.0, min(world.width - 1e-6, nx))
+            ny = max(0.0, min(world.height - 1e-6, ny))
+            if world.is_walkable(int(nx), int(ny)):
+                self.x, self.y = nx, ny
+                return
 
     def _wander(self, world: World) -> tuple[float, float]:
         """Return a cached random walkable target, refreshed every WANDER_INTERVAL ticks."""
@@ -256,11 +278,25 @@ class Entity:
 
     # --- Reproduction ------------------------------------------------------ #
 
-    def _try_reproduce(self) -> Entity | None:
+    def _try_reproduce(self, world: World) -> Entity | None:
         if self.energy < self.genome.repro_threshold * self.max_energy:
             return None
         child_energy = CHILD_ENERGY_FRACTION * self.max_energy
         self.energy -= child_energy
-        cx = self.x + random.uniform(-1.0, 1.0)
-        cy = self.y + random.uniform(-1.0, 1.0)
+        cx, cy = self._birth_spot(world)
         return Entity(cx, cy, self.diet, self.genome.mutate(), child_energy)
+
+    def _birth_spot(self, world: World) -> tuple[float, float]:
+        """Find somewhere beside the parent to put a newborn.
+
+        Without this a child can land in a lake or on a mountainside, where it
+        is stranded: nothing can walk out of a cell it could never walk into.
+        """
+        for _ in range(6):
+            cx = self.x + random.uniform(-1.0, 1.0)
+            cy = self.y + random.uniform(-1.0, 1.0)
+            cx = max(0.0, min(world.width - 1e-6, cx))
+            cy = max(0.0, min(world.height - 1e-6, cy))
+            if world.is_walkable(int(cx), int(cy)):
+                return cx, cy
+        return self.x, self.y

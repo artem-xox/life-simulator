@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import numpy as np
+
+from life_simulator.config.settings import Surface
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
 from life_simulator.simulation.entity import (
     ATTACK_RANGE,
@@ -13,7 +16,7 @@ from life_simulator.simulation.entity import (
 from life_simulator.simulation.genome import Genome
 from life_simulator.simulation.spatial import SpatialGrid
 from life_simulator.simulation.world import World
-from life_simulator.simulation.worldgen import WorldConfig, generate
+from life_simulator.simulation.worldgen import WorldConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,7 +24,8 @@ from life_simulator.simulation.worldgen import WorldConfig, generate
 
 
 def _small_world() -> World:
-    return generate(WorldConfig(seed=42, width=32, height=32, water_level=0.1))
+    """A uniform forest, so entity tests don't depend on where the noise put land."""
+    return World(np.full((32, 32), Surface.FOREST, dtype=np.int8))
 
 
 def _herb(world: World, energy: float | None = None) -> Entity:

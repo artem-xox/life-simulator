@@ -28,7 +28,7 @@ from life_simulator.simulation.worldgen import WorldConfig, generate
 log = logging.getLogger(__name__)
 
 #: Bumped whenever the on-disk format changes incompatibly.
-SAVE_VERSION = 1
+SAVE_VERSION = 2
 
 #: Default save file used by the in-game save/load hotkeys.
 DEFAULT_SAVE_PATH = Path("life_sim_save.json")

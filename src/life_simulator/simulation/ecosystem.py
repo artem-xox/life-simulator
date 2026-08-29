@@ -48,7 +48,7 @@ class Ecosystem:
     """Holds the world and all entities; drives the simulation loop.
 
     Attributes:
-        world: the terrain and food grid.
+        world: the surface and food grid.
         entities: all currently living entities.
         tick_count: total simulation ticks elapsed.
     """
@@ -186,10 +186,7 @@ class Ecosystem:
     def _spawn_initial(self, species: list[SpeciesConfig]) -> None:
         # Vectorised walkable-cell search — much faster than a Python loop over
         # every cell calling world.is_walkable().
-        from life_simulator.simulation.world import _WALKABLE_TABLE
-
-        walkable_mask = _WALKABLE_TABLE[self.world.biome] > 0  # (H, W) bool
-        ys, xs = np.where(walkable_mask)
+        ys, xs = np.where(self.world.walkable_mask())
         walkable = list(zip(xs.tolist(), ys.tolist(), strict=True))
 
         log.debug("walkable cells: %d", len(walkable))

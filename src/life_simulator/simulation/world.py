@@ -38,15 +38,23 @@ class World:
 
     Attributes:
         surface: int8 array of :class:`Surface` values, shape ``(height, width)``.
+        elevation: float32 array of normalised terrain height in [0, 1]. Kept
+            after generation because the renderer shades the map by it.
         food: float32 array of current food per cell.
         food_max: float32 array of per-cell food capacity (derived from surface).
     """
 
-    def __init__(self, surface: np.ndarray) -> None:
+    def __init__(self, surface: np.ndarray, elevation: np.ndarray | None = None) -> None:
         if surface.ndim != 2:
             raise ValueError("surface array must be 2-dimensional (height, width)")
         self.surface: np.ndarray = surface.astype(np.int8, copy=False)
         self.height, self.width = self.surface.shape
+
+        if elevation is None:
+            elevation = np.zeros(self.surface.shape, dtype=np.float32)
+        elif elevation.shape != self.surface.shape:
+            raise ValueError("elevation array must match the surface shape")
+        self.elevation: np.ndarray = elevation.astype(np.float32, copy=False)
 
         self.food_max: np.ndarray = _FOOD_MAX_TABLE[self.surface]
         self._regrow: np.ndarray = _REGROW_TABLE[self.surface]

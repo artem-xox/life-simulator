@@ -34,6 +34,7 @@ class Surface(IntEnum):
     FRESH_WATER = 1
     SAND = 2
     FOREST = 3
+    MOUNTAIN = 4
 
 
 # RGB colour used to draw each surface on the map.
@@ -42,15 +43,17 @@ SURFACE_COLORS: dict[Surface, tuple[int, int, int]] = {
     Surface.FRESH_WATER: (58, 116, 178),
     Surface.SAND: (216, 200, 146),
     Surface.FOREST: (58, 118, 62),
+    Surface.MOUNTAIN: (122, 116, 110),
 }
 
 # Maximum amount of food a single cell of each surface can hold. Grass grows in
-# the forest and nowhere else — sand and water feed nobody.
+# the forest and nowhere else — sand, rock and water feed nobody.
 SURFACE_FOOD_MAX: dict[Surface, float] = {
     Surface.OCEAN: 0.0,
     Surface.FRESH_WATER: 0.0,
     Surface.SAND: 0.0,
     Surface.FOREST: 10.0,
+    Surface.MOUNTAIN: 0.0,
 }
 
 # Per-tick food regrowth multiplier (fraction of food_max regained per tick).
@@ -59,14 +62,17 @@ SURFACE_REGROW_RATE: dict[Surface, float] = {
     Surface.FRESH_WATER: 0.0,
     Surface.SAND: 0.0,
     Surface.FOREST: 0.05,
+    Surface.MOUNTAIN: 0.0,
 }
 
-# Whether entities can enter a surface at all. Animals cannot swim.
+# Whether entities can enter a surface at all. Animals can neither swim nor
+# climb, so water and rock are both hard obstacles they must route around.
 SURFACE_WALKABLE: dict[Surface, bool] = {
     Surface.OCEAN: False,
     Surface.FRESH_WATER: False,
     Surface.SAND: True,
     Surface.FOREST: True,
+    Surface.MOUNTAIN: False,
 }
 
 # Movement cost multiplier per surface (higher = slower to cross). Only
@@ -76,6 +82,7 @@ SURFACE_MOVE_COST: dict[Surface, float] = {
     Surface.FRESH_WATER: float("inf"),
     Surface.SAND: 1.2,
     Surface.FOREST: 1.0,
+    Surface.MOUNTAIN: float("inf"),
 }
 
 

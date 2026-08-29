@@ -46,7 +46,7 @@ Decisions locked with the project owner:
 
 ### Surfaces
 
-One temperate biome with four **surface types** (replaces the seven v1 biomes):
+One temperate biome with five **surface types** (replaces the seven v1 biomes):
 
 | Surface | Description | Walkable | Grass |
 |---|---|---|---|
@@ -54,22 +54,36 @@ One temperate biome with four **surface types** (replaces the seven v1 biomes):
 | `FRESH_WATER` | rivers and lakes inside the island | no | no |
 | `SAND` | beaches along every waterline | yes | no |
 | `FOREST` | everything else; the living surface | yes | **yes** |
+| `MOUNTAIN` | bare rock above the mountain line | no | no |
+
+Water and rock are both hard obstacles. Animals can neither swim nor climb, so
+mountain ranges and rivers cut the island into regions that must be walked
+around — which shapes where herds can graze, where predators can corner prey,
+and which populations end up isolated from each other.
 
 ### Generation
 
 Deterministic from a single seed:
 
-1. **Island mask** — fBm elevation noise multiplied by a radial falloff, so the
-   map is always an island in an ocean. Coastline stays noisy and interesting.
-2. **Lakes** — depressions in the elevation field below a lake level.
-3. **Rivers** — a few paths traced from high-elevation interior points downhill
-   to the ocean, carving `FRESH_WATER` cells.
-4. **Beaches** — land cells within a noise-jittered distance of any water
-   become `SAND`.
-5. Remaining land is `FOREST`.
+1. **Terrain** — fractal gradient noise (Perlin, vectorised in numpy) sampled
+   through a *warped* coordinate field: every position is displaced along a
+   second noise field before the terrain is read. Domain warping is what turns
+   rounded blobs into a coast of inlets, headlands and straits.
+2. **Island** — a radial falloff pulls elevation towards zero at the map edges,
+   guaranteeing a ring of ocean. It leaves the middle of the map untouched, so
+   the coastline follows the terrain rather than tracing a circle. Landmasses
+   too small to sustain a population are drowned; the result is one main island,
+   sometimes with an offshore neighbour.
+3. **Surfaces** — elevation is cut into sea, a sand shore, forest, and bare rock
+   above the mountain line.
+4. **Lakes** — water the border ocean cannot reach is inland fresh water.
+5. **Rivers** — a dozen streams run downhill from the high ground by steepest
+   descent. Where they converge they share a course, so a branching network
+   forms and the trunks near the sea run wider than the headwaters.
 
 Default map ≈ 320×200 cells (configurable); the window opens full-screen and
-the camera fits the island on start.
+the camera fits the island on start. Generation is pure numpy and takes tens of
+milliseconds, so a new world is effectively instant even at large sizes.
 
 ### Grass
 
@@ -333,7 +347,7 @@ analysis in pandas.
 | Engine / rendering | `pygame-ce` | kept from v1 |
 | UI widgets | `pygame_gui` | setup screen |
 | Arrays / grass math | `numpy` | vectorised regrowth |
-| Terrain noise | `opensimplex` | island / rivers / moisture |
+| Terrain noise | numpy (in-tree Perlin) | replaced `opensimplex`, which ran pure Python at ~400 ms per octave |
 | Tests | `pytest` | simulation stays headless-testable |
 | Lint / CI | `ruff` + `pylint` (GitHub Actions) | kept |
 | Env / build | `uv` + `hatchling` | kept |

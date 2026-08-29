@@ -5,7 +5,44 @@ from __future__ import annotations
 import numpy as np
 
 from life_simulator.config.settings import Surface
-from life_simulator.simulation.worldgen import WorldConfig, generate
+from life_simulator.simulation.world import World
+from life_simulator.simulation.worldgen import MIN_ISLAND_FRACTION, WorldConfig, generate
+
+
+def _component_from(mask: np.ndarray, start: tuple[int, int]) -> np.ndarray:
+    """Flood-fill ``mask`` from ``start`` and return the cells reached.
+
+    Deliberately independent of the generator's own flood fill so the tests
+    check the shape of the result rather than mirroring its implementation.
+    """
+    reached = np.zeros(mask.shape, dtype=bool)
+    reached[start] = True
+    while True:
+        grown = reached.copy()
+        grown[1:, :] |= reached[:-1, :]
+        grown[:-1, :] |= reached[1:, :]
+        grown[:, 1:] |= reached[:, :-1]
+        grown[:, :-1] |= reached[:, 1:]
+        grown &= mask
+        if np.array_equal(grown, reached):
+            return reached
+        reached = grown
+
+
+def _components(mask: np.ndarray) -> list[np.ndarray]:
+    """Split ``mask`` into its connected components."""
+    remaining = mask.copy()
+    found: list[np.ndarray] = []
+    while remaining.any():
+        ys, xs = np.nonzero(remaining)
+        component = _component_from(mask, (ys[0], xs[0]))
+        found.append(component)
+        remaining &= ~component
+    return found
+
+
+def _island(seed: int, width: int = 160, height: int = 120) -> World:
+    return generate(WorldConfig(seed=seed, width=width, height=height))
 
 
 def test_same_seed_is_reproducible() -> None:
@@ -49,6 +86,88 @@ def test_shore_separates_ocean_from_forest() -> None:
     world = generate(WorldConfig(seed=11, width=96, height=96))
     assert np.any(world.surface == Surface.SAND)
     assert np.any(world.surface == Surface.FOREST)
+
+
+# --- Island shape ----------------------------------------------------------
+
+
+def test_map_border_is_ocean() -> None:
+    for seed in (1, 2, 3, 2026):
+        surface = _island(seed).surface
+        assert np.all(surface[0, :] == Surface.OCEAN)
+        assert np.all(surface[-1, :] == Surface.OCEAN)
+        assert np.all(surface[:, 0] == Surface.OCEAN)
+        assert np.all(surface[:, -1] == Surface.OCEAN)
+
+
+def test_one_landmass_dominates() -> None:
+    """A map may be an archipelago, but most of its land is one main island."""
+    for seed in (1, 2, 3, 2026):
+        land = _island(seed).surface != Surface.OCEAN
+        biggest = max(c.sum() for c in _components(land))
+        assert biggest >= 0.5 * land.sum()
+
+
+def test_no_speck_islands() -> None:
+    """Islands too small to sustain a population are drowned during generation."""
+    for seed in (1, 2, 3, 2026):
+        world = _island(seed)
+        land = world.surface != Surface.OCEAN
+        smallest = min(int(c.sum()) for c in _components(land))
+        assert smallest >= MIN_ISLAND_FRACTION * world.surface.size
+
+
+def test_map_has_a_meaningful_amount_of_land() -> None:
+    for seed in (1, 2, 3, 2026):
+        world = _island(seed)
+        assert 0.2 < float(world.walkable_mask().mean()) < 0.8
+
+
+def test_small_maps_still_produce_a_living_island() -> None:
+    """The setup screen allows maps down to 80 cells wide."""
+    world = _island(5, width=80, height=60)
+    assert float(world.walkable_mask().mean()) > 0.15
+
+
+# --- Mountains -------------------------------------------------------------
+
+
+def test_mountains_exist_and_block_movement() -> None:
+    world = _island(2026)
+    mountains = world.surface == Surface.MOUNTAIN
+    assert mountains.any()
+    assert not world.walkable_mask()[mountains].any()
+
+
+def test_mountains_sit_above_the_forest() -> None:
+    world = _island(2026)
+    mountain_floor = world.elevation[world.surface == Surface.MOUNTAIN].min()
+    assert mountain_floor > world.elevation[world.surface == Surface.FOREST].mean()
+
+
+# --- Inland water ----------------------------------------------------------
+
+
+def test_inland_water_exists() -> None:
+    assert np.any(_island(2026).surface == Surface.FRESH_WATER)
+
+
+def test_rivers_reach_the_ocean() -> None:
+    surface = _island(2026).surface
+    fresh = surface == Surface.FRESH_WATER
+    ocean = surface == Surface.OCEAN
+    touching_ocean = (
+        (fresh[1:, :] & ocean[:-1, :]).any()
+        or (fresh[:-1, :] & ocean[1:, :]).any()
+        or (fresh[:, 1:] & ocean[:, :-1]).any()
+        or (fresh[:, :-1] & ocean[:, 1:]).any()
+    )
+    assert touching_ocean
+
+
+def test_inland_water_is_never_walkable() -> None:
+    world = _island(2026)
+    assert not world.walkable_mask()[world.surface == Surface.FRESH_WATER].any()
 
 
 def test_food_grows_only_in_forest() -> None:

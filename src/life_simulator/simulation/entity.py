@@ -3,7 +3,7 @@
 Behaviour is a simple priority loop each tick:
   1. Age and pay the metabolic energy cost.
   2. Die if starved or too old.
-  3. Act according to diet (seek food / seek prey).
+  3. Act according to diet (seek grass / seek prey).
   4. Reproduce if energy is high enough.
 
 Adding new behaviours: subclass Entity or extend the _step_* methods.
@@ -45,13 +45,13 @@ BASE_ENERGY_COST: float = 0.30
 #: Max energy a size-1 entity can hold.
 MAX_ENERGY_BASE: float = 20.0
 
-#: Food consumed from the cell per eating action (herbivores).
-EATING_AMOUNT: float = 2.0
+#: Grass consumed from the cell per grazing action (herbivores).
+GRAZE_AMOUNT: float = 2.0
 
-#: Energy gained per unit of food eaten. Deliberately low: with abundant food an
-#: herbivore net-gains ~0.5 energy/tick, making reproduction take ~25 ticks
+#: Energy gained per unit of grass eaten. Deliberately low: with abundant grass
+#: an herbivore net-gains ~0.5 energy/tick, making reproduction take ~25 ticks
 #: rather than every 2-3 ticks.
-EATING_GAIN: float = 0.40
+GRAZE_ENERGY_GAIN: float = 0.40
 
 #: Energy stolen from prey per tick while within ATTACK_RANGE (carnivores).
 #: Low value forces several ticks of sustained contact to drain a prey's energy.
@@ -173,25 +173,25 @@ class Entity:
     # --- Herbivore behaviour ----------------------------------------------- #
 
     def _step_herbivore(self, world: World) -> None:
-        target = self._find_food_target(world)
+        target = self._find_grass_target(world)
         if target is None:
             target = self._wander(world)
         self._move_toward(target[0], target[1], world)
 
-        # Eat at current cell (entity has moved; gains energy from where it now stands).
+        # Graze at current cell (entity has moved; gains energy where it now stands).
         cx, cy = int(self.x), int(self.y)
         if world.in_bounds(cx, cy):
-            eaten = world.eat_at(cx, cy, EATING_AMOUNT)
-            self.energy = min(self.max_energy, self.energy + eaten * EATING_GAIN)
+            eaten = world.graze_at(cx, cy, GRAZE_AMOUNT)
+            self.energy = min(self.max_energy, self.energy + eaten * GRAZE_ENERGY_GAIN)
 
-    def _find_food_target(self, world: World) -> tuple[float, float] | None:
-        """Return the position of the richest food cell in vision, or None."""
+    def _find_grass_target(self, world: World) -> tuple[float, float] | None:
+        """Return the position of the richest grass cell in vision, or None."""
         r = int(self.genome.vision)
         x0 = max(0, int(self.x) - r)
         y0 = max(0, int(self.y) - r)
         x1 = min(world.width, int(self.x) + r + 1)
         y1 = min(world.height, int(self.y) + r + 1)
-        patch = world.food[y0:y1, x0:x1]
+        patch = world.grass[y0:y1, x0:x1]
         if patch.size == 0 or float(patch.max()) <= 0.0:
             return None
         idx = int(np.argmax(patch))

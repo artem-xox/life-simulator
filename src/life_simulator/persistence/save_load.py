@@ -4,10 +4,10 @@ A save captures everything needed to reproduce the scene exactly:
 
 * the :class:`WorldConfig` (terrain is deterministic from its seed);
 * the starting :class:`SpeciesConfig` list (so a restart re-rolls the same setup);
-* the current food grid (a dynamic resource not recoverable from the seed alone);
+* the current grass grid (a dynamic resource not recoverable from the seed alone);
 * every living entity's position, energy, age, diet, and full genome.
 
-On load the world terrain is regenerated from the seed, the saved food grid is
+On load the world terrain is regenerated from the seed, the saved grass grid is
 applied over it, and entities are reconstructed verbatim.
 """
 
@@ -28,7 +28,7 @@ from life_simulator.simulation.worldgen import WorldConfig, generate
 log = logging.getLogger(__name__)
 
 #: Bumped whenever the on-disk format changes incompatibly.
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 
 #: Default save file used by the in-game save/load hotkeys.
 DEFAULT_SAVE_PATH = Path("life_sim_save.json")
@@ -73,7 +73,7 @@ def save_game(
             }
             for s in species
         ],
-        "food": np.round(ecosystem.world.food, 3).tolist(),
+        "grass": np.round(ecosystem.world.grass, 3).tolist(),
         "entities": [_entity_to_dict(e) for e in ecosystem.entities],
     }
     Path(path).write_text(json.dumps(data), encoding="utf-8")
@@ -108,17 +108,17 @@ def load_game(path: str | Path) -> tuple[Ecosystem, WorldConfig, list[SpeciesCon
         for s in data["species"]
     ]
 
-    # Terrain is reproducible from the seed; the dynamic food grid is restored.
+    # Terrain is reproducible from the seed; the dynamic grass grid is restored.
     world = generate(world_cfg)
-    if "food" in data:
-        food = np.asarray(data["food"], dtype=np.float32)
-        if food.shape == world.food.shape:
-            world.food = np.clip(food, 0.0, world.food_max)
+    if "grass" in data:
+        grass = np.asarray(data["grass"], dtype=np.float32)
+        if grass.shape == world.grass.shape:
+            world.grass = np.clip(grass, 0.0, world.grass_max)
         else:
             log.warning(
-                "saved food grid %s != world %s; keeping regenerated food",
-                food.shape,
-                world.food.shape,
+                "saved grass grid %s != world %s; keeping regenerated grass",
+                grass.shape,
+                world.grass.shape,
             )
 
     entities = [

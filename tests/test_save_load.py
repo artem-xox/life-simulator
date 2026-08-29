@@ -52,7 +52,7 @@ def test_loaded_entities_match_originals(tmp_path) -> None:
         assert abs(restored.genome.speed - original.genome.speed) < 1e-6
 
 
-def test_loaded_food_grid_matches(tmp_path) -> None:
+def test_loaded_grass_grid_matches(tmp_path) -> None:
     eco, world_cfg, species = _make_ecosystem()
     path = tmp_path / "save.json"
     save_game(path, eco, world_cfg, species)
@@ -60,7 +60,7 @@ def test_loaded_food_grid_matches(tmp_path) -> None:
     loaded, _, _ = load_game(path)
 
     # Food is saved rounded to 3 decimals; allow that tolerance.
-    assert np.allclose(loaded.world.food, eco.world.food, atol=1e-2)
+    assert np.allclose(loaded.world.grass, eco.world.grass, atol=1e-2)
 
 
 def test_loaded_world_terrain_is_reproducible(tmp_path) -> None:

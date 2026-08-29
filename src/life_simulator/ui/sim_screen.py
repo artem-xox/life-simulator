@@ -13,6 +13,7 @@ Controls:
     * Space ..................... pause / resume
     * ] / [ .................... speed up / slow down
     * F ......................... fit world to screen
+    * F11 ....................... toggle fullscreen / windowed
     * R ......................... restart with a new random seed (same species)
     * S / L ..................... save / load the simulation
     * G ......................... toggle the population graph
@@ -296,7 +297,7 @@ class SimScreen(Screen):
             self._blit_text(surface, text, 16, y, color)
             y += 22
 
-        hint = "Space=pause ]/[=speed F=fit R=restart S/L=save G=graph ESC=menu"
+        hint = "Space=pause ]/[=speed F=fit R=restart S/L=save G=graph F11=window ESC=menu"
         hint_surf = self._font.render(hint, True, (160, 160, 160))
         surface.blit(hint_surf, (10, surface.get_height() - 24))
 

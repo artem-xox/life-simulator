@@ -8,7 +8,7 @@ the roadmap: stages, tickets, and acceptance criteria.
 | # | Stage | Deliverable | Status |
 |---|-------|-------------|--------|
 | 0–6 | **v1** | world gen, entities, asexual evolution, setup screen, stats, save/load | ✅ done |
-| 7 | Map 2.0 | island with rivers/lakes/beaches, grass layer, full-screen | ⬜ todo |
+| 7 | Map 2.0 | island with rivers/lakes/beaches/mountains, grass layer, full-screen | ✅ done |
 | 8 | Genome 2.0 | new gene set, phenotype trade-offs, crossover | ⬜ todo |
 | 9 | Lifecycle | juveniles, 1–2 births per life, death causes | ⬜ todo |
 | 10 | Behaviour | state machines, stealth detection, chase & escape | ⬜ todo |
@@ -38,10 +38,10 @@ living grass layer; the app opens full-screen with the island fitted.
 | 7.3 | Lakes (water the ocean cannot reach) and a branching river network traced downhill to the ocean | ✅ lakes and rivers on the default seed; rivers reach the ocean |
 | 7.3a | Impassable mountains above a `mountain_level`, and obstacle avoidance so animals route around rock and water instead of freezing | ✅ animals aimed into rock slide around it; nothing spawns on impassable cells |
 | 7.4 | Beaches: `SAND` on land cells within noise-jittered distance of water | ✅ every waterline has a sand fringe; width tunable via `shore_width` |
-| 7.5 | Grass layer: `grass` float32 on `FOREST` only; logistic regrowth + neighbour reseeding; `graze_at()` API replacing `eat_at()` | unit tests: regrowth curve, bare-cell recovery only via neighbours, no grass outside forest |
-| 7.6 | Full-screen borderless window by default (toggle + resizable kept); camera fits island on start | app opens full-screen; `F` refits |
+| 7.5 | Grass layer: `grass` float32 on `FOREST` only; logistic regrowth + neighbour reseeding; `graze_at()` API replacing `eat_at()` | ✅ regrowth curve, bare-cell recovery only via neighbours, no grass outside forest |
+| 7.6 | Full-screen borderless window by default (`F11` toggle, resizable kept); camera fits island on start | ✅ app opens full-screen; `F` refits |
 | 7.7 | Terrain render v2: hillshading, altitude bands, grass density shading, water depth tint, shoreline surf, canopy texture | ✅ grazing scars visibly change the map during a run; map reads as terrain, not flat colour blocks |
-| 7.8 | Cleanup: delete `ui/map_screen.py`, old biome food tables, dead constants | lint clean; all tests green |
+| 7.8 | Cleanup: delete `ui/map_screen.py`, old biome food tables, dead constants | ✅ lint clean; all tests green |
 
 ---
 

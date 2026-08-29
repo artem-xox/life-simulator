@@ -127,16 +127,6 @@ def _canopy_texture(shape: tuple[int, int]) -> np.ndarray:
     return 1.0 + CANOPY_TEXTURE * (clumped - clumped.mean()) * 4.0
 
 
-def build_terrain_surface(world: World) -> pygame.Surface:
-    """Build a 1px-per-cell shaded surface for a world's current state."""
-    return _to_surface(_shade_terrain(world))
-
-
-def _shade_terrain(world: World) -> np.ndarray:
-    """Return the fully shaded ``(height, width, 3)`` colour array for a world."""
-    return _blend_grass(world, *_static_layers(world))
-
-
 def _static_layers(world: World) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Shade everything that does not change while the simulation runs.
 
@@ -206,8 +196,8 @@ def _blend_grass(
     """Colour the forest by how much grass is left standing on it."""
     rgb = static.copy()
     if forest.any():
-        capacity = np.maximum(world.food_max[forest], 1e-6)
-        density = np.clip(world.food[forest] / capacity, 0.0, 1.0)[:, None]
+        capacity = np.maximum(world.grass_max[forest], 1e-6)
+        density = np.clip(world.grass[forest] / capacity, 0.0, 1.0)[:, None]
         bare = np.asarray(GRASS_BARE_COLOR, dtype=np.float32)
         rgb[forest] = (bare + (forest_lush - bare) * density) * forest_factor[:, None]
     return np.clip(rgb, 0.0, 255.0)

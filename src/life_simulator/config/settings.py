@@ -11,9 +11,13 @@ from enum import IntEnum
 # --- Window / rendering defaults -------------------------------------------
 
 WINDOW_TITLE = "Life Simulator"
+TARGET_FPS = 60
+
+# The map is the point, so the simulator opens borderless at desktop size.
+# F11 drops it back to a plain resizable window of WINDOW_WIDTH x WINDOW_HEIGHT.
+START_FULLSCREEN = True
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 800
-TARGET_FPS = 60
 
 # Background colour used to clear the screen each frame.
 BACKGROUND_COLOR = (18, 18, 22)
@@ -46,9 +50,9 @@ SURFACE_COLORS: dict[Surface, tuple[int, int, int]] = {
     Surface.MOUNTAIN: (122, 116, 110),
 }
 
-# Maximum amount of food a single cell of each surface can hold. Grass grows in
-# the forest and nowhere else — sand, rock and water feed nobody.
-SURFACE_FOOD_MAX: dict[Surface, float] = {
+# How much grass a single cell of each surface can hold. Grass grows in the
+# forest and nowhere else — sand, rock and water feed nobody.
+SURFACE_GRASS_MAX: dict[Surface, float] = {
     Surface.OCEAN: 0.0,
     Surface.FRESH_WATER: 0.0,
     Surface.SAND: 0.0,
@@ -56,14 +60,22 @@ SURFACE_FOOD_MAX: dict[Surface, float] = {
     Surface.MOUNTAIN: 0.0,
 }
 
-# Per-tick food regrowth multiplier (fraction of food_max regained per tick).
-SURFACE_REGROW_RATE: dict[Surface, float] = {
-    Surface.OCEAN: 0.0,
-    Surface.FRESH_WATER: 0.0,
-    Surface.SAND: 0.0,
-    Surface.FOREST: 0.05,
-    Surface.MOUNTAIN: 0.0,
-}
+
+# --- Grass dynamics ---------------------------------------------------------
+# Grass is the ecosystem's only energy inflow, and it grows logistically: a
+# patch regrows from what is still standing on it, fastest at middling density
+# and not at all once the cell has been grazed to bare earth.
+
+# Fraction of the standing grass added back per tick, before the crowding term.
+GRASS_REGROW_RATE: float = 0.06
+
+# A bare cell has nothing left to grow from, so it can only recover by seeding
+# in from its neighbours — which is why an overgrazed patch heals slowly from
+# its edges inwards and leaves a visible scar in the meantime.
+GRASS_SPREAD_RATE: float = 0.02
+
+# Grass starts below capacity so the map is not trivially abundant on tick one.
+INITIAL_GRASS_FRACTION: float = 0.6
 
 # Whether entities can enter a surface at all. Animals can neither swim nor
 # climb, so water and rock are both hard obstacles they must route around.

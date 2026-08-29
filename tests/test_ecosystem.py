@@ -41,9 +41,9 @@ def _carn(world: World, x: float = 16.0, energy: float | None = None) -> Entity:
 # ---------------------------------------------------------------------------
 
 
-def test_herbivore_gains_energy_from_food() -> None:
+def test_herbivore_gains_energy_from_grass() -> None:
     world = _small_world()
-    world.food[:] = world.food_max  # fill food
+    world.grass[:] = world.grass_max  # fill grass
     herb = _herb(world, energy=5.0)
     spatial = SpatialGrid()
     spatial.rebuild([herb])
@@ -56,7 +56,7 @@ def test_herbivore_gains_energy_from_food() -> None:
 
 def test_starving_herbivore_dies() -> None:
     world = _small_world()
-    world.food[:] = 0.0  # no food anywhere
+    world.grass[:] = 0.0  # no grass anywhere
     herb = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(metabolism=2.0), energy=0.01)
     spatial = SpatialGrid()
     spatial.rebuild([herb])
@@ -66,7 +66,7 @@ def test_starving_herbivore_dies() -> None:
 
 def test_old_entity_dies() -> None:
     world = _small_world()
-    world.food[:] = world.food_max
+    world.grass[:] = world.grass_max
     herb = _herb(world, energy=20.0)
     herb.age = MAX_AGE  # one more tick will tip it over
     spatial = SpatialGrid()
@@ -77,7 +77,7 @@ def test_old_entity_dies() -> None:
 
 def test_reproduction_spawns_child() -> None:
     world = _small_world()
-    world.food[:] = world.food_max
+    world.grass[:] = world.grass_max
     # Give the entity energy just above its reproduction threshold.
     herb = _herb(world)
     herb.energy = herb.max_energy  # definitely above threshold
@@ -91,7 +91,7 @@ def test_reproduction_spawns_child() -> None:
 
 def test_reproduction_reduces_parent_energy() -> None:
     world = _small_world()
-    world.food[:] = 0.0
+    world.grass[:] = 0.0
     herb = _herb(world)
     herb.energy = herb.max_energy
     before = herb.energy

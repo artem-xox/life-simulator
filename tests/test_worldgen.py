@@ -216,17 +216,17 @@ def test_shore_width_controls_how_much_sand() -> None:
     assert sand_fraction(8.0) > sand_fraction(3.0) > 0.0
 
 
-def test_food_grows_only_in_forest() -> None:
+def test_grass_grows_only_in_forest() -> None:
     world = generate(WorldConfig(seed=9, width=48, height=48))
-    assert np.all(world.food_max[world.surface != Surface.FOREST] == 0.0)
-    assert np.all(world.food_max[world.surface == Surface.FOREST] > 0.0)
+    assert np.all(world.grass_max[world.surface != Surface.FOREST] == 0.0)
+    assert np.all(world.grass_max[world.surface == Surface.FOREST] > 0.0)
 
 
-def test_food_starts_below_capacity() -> None:
+def test_grass_starts_below_capacity() -> None:
     world = generate(WorldConfig(seed=9, width=48, height=48))
-    # World starts at 60 % of capacity to slow the initial population burst.
-    assert np.all(world.food <= world.food_max)
-    assert np.any(world.food > 0)
+    # World starts below capacity to slow the initial population burst.
+    assert np.all(world.grass <= world.grass_max)
+    assert np.any(world.grass > 0)
 
 
 def test_water_is_not_walkable() -> None:

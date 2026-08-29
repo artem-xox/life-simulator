@@ -53,7 +53,12 @@ make install
 make run
 ```
 
-The simulator opens borderless at desktop size; `F11` drops it to a window.
+The simulator opens full-screen; `F11` drops it to a window.
+
+The default map is 640×400 cells — about two screen pixels per cell full-screen,
+so terrain reads as landscape rather than as tiles. Raise it in the setup screen
+for finer detail; terrain features scale with the map, so a larger map is the
+same island in more detail rather than a different, busier one.
 
 ## Setup screen
 
@@ -62,7 +67,7 @@ parameters, then click **Start Simulation**.
 
 | Column | Parameters |
 |--------|-----------|
-| **World** | Seed, Water level, Map width, Map height |
+| **World** | Seed, Water level, Map width (240–1200), Map height (150–750) |
 | **Herbivores** | Count, Speed, Vision, Metabolism, Repro threshold, Mutation rate |
 | **Carnivores** | Count, Speed, Vision, Metabolism, Repro threshold, Mutation rate |
 
@@ -120,6 +125,7 @@ src/life_simulator/
     entity.py         Entity behaviour loop (move, graze, attack, reproduce)
     ecosystem.py      Ecosystem: tick(), spawn, ENTITY_CAP, Stats sampling
     spatial.py        SpatialGrid: hash buckets for O(k) neighbour queries
+    grid.py           shared numpy neighbourhood maths (blur, dilate, spread)
     stats.py          Stats: ring buffer of population + average-genome samples
   persistence/
     save_load.py      JSON save/load of full simulation state

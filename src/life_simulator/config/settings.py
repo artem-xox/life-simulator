@@ -133,6 +133,11 @@ ELEVATION_SHADE: float = 0.30
 # are darkened, which is what makes ranges read as ridges and valleys instead
 # of flat grey patches. The light comes from the north-west, as on a map.
 HILLSHADE_STRENGTH: float = 0.22
+
+# Smoothing passes applied to elevation before the gradient is taken. The raw
+# terrain's finest noise octave would otherwise dominate the shading and make a
+# high-resolution map look like brushed metal instead of hills.
+HILLSHADE_SMOOTHING: int = 3
 HILLSHADE_LIGHT: tuple[float, float] = (-0.707, -0.707)
 
 # Elevation, texture and hillshade all multiply the same colour, so their

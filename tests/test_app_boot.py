@@ -34,10 +34,15 @@ def test_windowed_mode_uses_the_configured_size() -> None:
 
 
 @pytest.mark.usefixtures("display")
-def test_fullscreen_mode_fills_the_desktop() -> None:
+def test_fullscreen_mode_fills_the_screen() -> None:
+    """Full width, and as tall as the screen allows once its chrome is gone."""
     from life_simulator.__main__ import _open_display
 
-    assert _open_display(fullscreen=True).get_size() == pygame.display.get_desktop_sizes()[0]
+    desktop_w, desktop_h = pygame.display.get_desktop_sizes()[0]
+    width, height = _open_display(fullscreen=True).get_size()
+
+    assert width == desktop_w
+    assert 0.9 * desktop_h <= height <= desktop_h
 
 
 @pytest.mark.usefixtures("display")

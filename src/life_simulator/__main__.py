@@ -32,21 +32,21 @@ log = logging.getLogger(__name__)
 
 
 def _open_display(fullscreen: bool) -> pygame.Surface:
-    """Open (or reopen) the window, borderless at desktop size or windowed.
+    """Open (or reopen) the window, either fullscreen or windowed.
 
-    A borderless window filling the desktop is used rather than an exclusive
-    fullscreen mode: it fills the screen just the same but does not switch the
-    display's resolution, so alt-tabbing away and back is instant.
+    Fullscreen asks for size ``(0, 0)``, which hands SDL the desktop and gets a
+    borderless window the size of the usable screen. On macOS that means the
+    menu bar is hidden and the app gets its own Space — a borderless window at
+    the raw desktop size would instead be overlapped by the menu bar, hiding
+    the top of the HUD.
     """
     if fullscreen:
-        width, height = pygame.display.get_desktop_sizes()[0]
-        flags = pygame.NOFRAME
+        surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     else:
-        width, height = WINDOW_WIDTH, WINDOW_HEIGHT
-        flags = pygame.RESIZABLE
+        surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
 
-    log.info("opening display  %dx%d  fullscreen=%s", width, height, fullscreen)
-    return pygame.display.set_mode((width, height), flags)
+    log.info("opening display  %dx%d  fullscreen=%s", *surface.get_size(), fullscreen)
+    return surface
 
 
 # ---------------------------------------------------------------------------

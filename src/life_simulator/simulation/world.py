@@ -24,6 +24,7 @@ from life_simulator.config.settings import (
     SURFACE_WALKABLE,
     Surface,
 )
+from life_simulator.simulation.grid import neighbour_mean
 
 
 def _per_surface_lookup(mapping: dict[Surface, float]) -> np.ndarray:
@@ -76,7 +77,7 @@ class World:
             dt_ticks: number of simulation ticks worth of growth to apply.
         """
         headroom = self._headroom()
-        seeded = _neighbour_mean(self.grass)
+        seeded = neighbour_mean(self.grass)
 
         growth = GRASS_REGROW_RATE * self.grass + GRASS_SPREAD_RATE * seeded
         growth *= headroom * dt_ticks
@@ -119,17 +120,3 @@ class World:
         Vectorised alternative to calling :meth:`is_walkable` per cell.
         """
         return _WALKABLE_TABLE[self.surface] > 0
-
-
-def _neighbour_mean(field: np.ndarray) -> np.ndarray:
-    """Return the mean of each cell's four orthogonal neighbours.
-
-    Cells off the edge of the map count as zero, so grass spreads inwards from
-    a coastline rather than wrapping around it.
-    """
-    total = np.zeros_like(field)
-    total[1:, :] += field[:-1, :]
-    total[:-1, :] += field[1:, :]
-    total[:, 1:] += field[:, :-1]
-    total[:, :-1] += field[:, 1:]
-    return total * 0.25

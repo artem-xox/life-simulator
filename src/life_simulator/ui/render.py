@@ -30,6 +30,7 @@ from life_simulator.config.settings import (
     GRASS_LOWLAND_COLOR,
     HERBIVORE_COLOR,
     HILLSHADE_LIGHT,
+    HILLSHADE_SMOOTHING,
     HILLSHADE_STRENGTH,
     MOUNTAIN_PEAK_COLOR,
     MOUNTAIN_SNOW_EXPONENT,
@@ -42,6 +43,7 @@ from life_simulator.config.settings import (
     Surface,
 )
 from life_simulator.simulation.entity import Diet
+from life_simulator.simulation.grid import box_blur, touching
 from life_simulator.simulation.world import World
 from life_simulator.ui.camera import Camera
 
@@ -82,16 +84,6 @@ def _lerp(low: tuple[int, int, int], high: tuple[int, int, int], t: np.ndarray) 
     return start + (end - start) * t[:, None]
 
 
-def _touching(mask: np.ndarray, other: np.ndarray) -> np.ndarray:
-    """Return the cells of ``mask`` that share an edge with a cell of ``other``."""
-    near = np.zeros(other.shape, dtype=bool)
-    near[1:, :] |= other[:-1, :]
-    near[:-1, :] |= other[1:, :]
-    near[:, 1:] |= other[:, :-1]
-    near[:, :-1] |= other[:, 1:]
-    return mask & near
-
-
 def _hillshade(elevation: np.ndarray) -> np.ndarray:
     """Return a brightness multiplier that lights slopes from the north-west.
 
@@ -100,7 +92,12 @@ def _hillshade(elevation: np.ndarray) -> np.ndarray:
     than a flat patch of grey. The gradient is divided by its own spread so the
     effect is comparable whether a map is smooth or craggy.
     """
-    grad_y, grad_x = np.gradient(elevation.astype(np.float32))
+    # Shade the landforms, not the grain. The gradient of raw terrain picks up
+    # the finest noise octave, which on a high-resolution map turns the island
+    # into brushed metal; smoothing first leaves ridges and valleys behind.
+    smoothed = box_blur(elevation.astype(np.float32), HILLSHADE_SMOOTHING)
+
+    grad_y, grad_x = np.gradient(smoothed)
     light_x, light_y = HILLSHADE_LIGHT
     illumination = -(grad_x * light_x + grad_y * light_y)
 
@@ -174,7 +171,7 @@ def _static_layers(world: World) -> tuple[np.ndarray, np.ndarray, np.ndarray, np
     sand = surface == Surface.SAND
     rgb[sand] *= factor[sand][:, None]
 
-    surf = _touching(water, land)
+    surf = touching(water, land)
     if surf.any():
         rgb[surf] += (np.asarray(SURF_COLOR, dtype=np.float32) - rgb[surf]) * SURF_BLEND
 

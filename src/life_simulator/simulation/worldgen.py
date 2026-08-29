@@ -27,9 +27,17 @@ from dataclasses import dataclass
 import numpy as np
 
 from life_simulator.config.settings import Surface
+from life_simulator.simulation.grid import box_blur, dilate
 from life_simulator.simulation.world import World
 
 log = logging.getLogger(__name__)
+
+#: Map size the cell-denominated constants below were tuned against. Anything
+#: measured in cells — feature sizes, warp distance, beach and river widths —
+#: is scaled by how far a map departs from this, so raising the resolution
+#: renders the same island in finer detail instead of dissolving it into an
+#: archipelago of small ones.
+REFERENCE_MAP_SIZE: float = 200.0
 
 #: Feature size of the noise that modulates beach width, and the narrowest the
 #: shore is allowed to get as a multiple of ``shore_width``. The width swings
@@ -39,7 +47,7 @@ BEACH_JITTER_SCALE: float = 40.0
 BEACH_WIDTH_MIN: float = 0.25
 
 #: Lake and river banks are this fraction of the open-coast beach width.
-FRESH_SHORE_RATIO: float = 0.3
+FRESH_SHORE_RATIO: float = 0.18
 
 #: Normalised radius at which the island falloff starts biting, and the radius
 #: at which it has pulled elevation all the way to zero. Coordinates are scaled
@@ -72,6 +80,12 @@ RIVER_SOURCE_RANGE: tuple[int, int] = (10, 16)
 
 #: Rivers start on land above this quantile of the island's elevation.
 RIVER_SOURCE_QUANTILE: float = 0.75
+
+#: Smoothing passes applied to the elevation streams are traced over. Raw
+#: terrain is pocked with tiny local minima; each one traps a stream and forces
+#: it onto the fallback rule, which walks it straight at the sea and leaves a
+#: ruler-drawn line across the map. Smoothing removes the traps.
+RIVER_TERRAIN_SMOOTHING: int = 4
 
 #: How many streams have to share a cell before the river is drawn wider.
 RIVER_FLOW_FOR_WIDTH_1: int = 3
@@ -109,8 +123,8 @@ class WorldConfig:
     """
 
     seed: int = 1
-    width: int = 256
-    height: int = 192
+    width: int = 640
+    height: int = 400
     water_level: float = 0.28
     mountain_level: float = 0.83
     shore_width: float = 5.0
@@ -191,6 +205,11 @@ def _stretch(field: np.ndarray) -> np.ndarray:
     return np.clip((field - lo) / (hi - lo), 0.0, 1.0)
 
 
+def _feature_scale(cfg: WorldConfig) -> float:
+    """How much bigger this map is than the size the constants were tuned at."""
+    return min(cfg.width, cfg.height) / REFERENCE_MAP_SIZE
+
+
 def _grid(cfg: WorldConfig) -> tuple[np.ndarray, np.ndarray]:
     """Return ``(x, y)`` coordinate arrays of shape ``(height, width)``."""
     return np.meshgrid(
@@ -202,17 +221,21 @@ def _grid(cfg: WorldConfig) -> tuple[np.ndarray, np.ndarray]:
 def _elevation_field(cfg: WorldConfig, rng: np.random.Generator) -> np.ndarray:
     """Build the warped, island-shaped elevation field for a config."""
     grid_x, grid_y = _grid(cfg)
+    scale = _feature_scale(cfg)
+    warp_scale = WARP_SCALE * scale
+    warp_strength = WARP_STRENGTH * scale
 
     # Sampling happens at displaced coordinates, so keep everything clear of
     # zero: the noise lattice is only defined for non-negative positions.
-    margin = 2.0 * WARP_STRENGTH
-    warp_x = _fractal_noise(rng, grid_x + margin, grid_y + margin, WARP_SCALE, WARP_OCTAVES)
-    warp_y = _fractal_noise(rng, grid_x + margin, grid_y + margin, WARP_SCALE, WARP_OCTAVES)
+    margin = 2.0 * warp_strength
+    warp_x = _fractal_noise(rng, grid_x + margin, grid_y + margin, warp_scale, WARP_OCTAVES)
+    warp_y = _fractal_noise(rng, grid_x + margin, grid_y + margin, warp_scale, WARP_OCTAVES)
 
-    sample_x = np.clip(grid_x + margin + WARP_STRENGTH * warp_x, 0.0, None)
-    sample_y = np.clip(grid_y + margin + WARP_STRENGTH * warp_y, 0.0, None)
+    sample_x = np.clip(grid_x + margin + warp_strength * warp_x, 0.0, None)
+    sample_y = np.clip(grid_y + margin + warp_strength * warp_y, 0.0, None)
 
-    elevation = _stretch(_fractal_noise(rng, sample_x, sample_y, cfg.elevation_scale, cfg.octaves))
+    terrain_scale = cfg.elevation_scale * scale
+    elevation = _stretch(_fractal_noise(rng, sample_x, sample_y, terrain_scale, cfg.octaves))
     return elevation * (1.0 - _island_falloff(cfg.width, cfg.height))
 
 
@@ -233,21 +256,11 @@ def _island_falloff(width: int, height: int) -> np.ndarray:
 # --- Grid helpers ----------------------------------------------------------
 
 
-def _dilate(mask: np.ndarray) -> np.ndarray:
-    """Grow a boolean mask by one cell in the four cardinal directions."""
-    out = mask.copy()
-    out[1:, :] |= mask[:-1, :]
-    out[:-1, :] |= mask[1:, :]
-    out[:, 1:] |= mask[:, :-1]
-    out[:, :-1] |= mask[:, 1:]
-    return out
-
-
 def _fill(mask: np.ndarray, seed: np.ndarray) -> np.ndarray:
     """Grow ``seed`` inside ``mask`` until it stops changing."""
     reached = mask & seed
     while True:
-        grown = _dilate(reached) & mask
+        grown = dilate(reached) & mask
         if np.array_equal(grown, reached):
             return reached
         reached = grown
@@ -275,7 +288,7 @@ def _distance_to(mask: np.ndarray) -> np.ndarray:
     step = 0
     while True:
         step += 1
-        frontier = _dilate(frontier) & ~visited
+        frontier = dilate(frontier) & ~visited
         if not frontier.any():
             return dist
         dist[frontier] = step
@@ -413,7 +426,16 @@ def _trace_stream(
     return path
 
 
-def _carve_rivers(surface: np.ndarray, elevation: np.ndarray, rng: random.Random) -> int:
+def _widen(mask: np.ndarray, steps: int) -> np.ndarray:
+    """Grow a mask outwards by ``steps`` cells."""
+    for _ in range(steps):
+        mask = dilate(mask)
+    return mask
+
+
+def _carve_rivers(
+    surface: np.ndarray, elevation: np.ndarray, cfg: WorldConfig, rng: random.Random
+) -> int:
     """Trace streams from the high ground and cut their combined network in.
 
     Every stream runs the whole way to the sea and adds to a flow count per
@@ -424,18 +446,20 @@ def _carve_rivers(surface: np.ndarray, elevation: np.ndarray, rng: random.Random
         The number of streams traced.
     """
     ocean_distance = _distance_to(surface == Surface.OCEAN)
-    sources = _river_sources(surface, elevation, ocean_distance, rng)
+    relief = box_blur(elevation, RIVER_TERRAIN_SMOOTHING)
+    sources = _river_sources(surface, relief, ocean_distance, rng)
 
     flow = np.zeros(surface.shape, dtype=np.int32)
     for source in sources:
-        for x, y in _trace_stream(surface, elevation, ocean_distance, source):
+        for x, y in _trace_stream(surface, relief, ocean_distance, source):
             flow[y, x] += 1
 
+    # Channels widen with the map so a river stays a river rather than
+    # thinning to a hairline as the resolution goes up.
+    steps = max(1, round(_feature_scale(cfg)))
     channel = flow > 0
-    wide = flow >= RIVER_FLOW_FOR_WIDTH_1
-    wider = flow >= RIVER_FLOW_FOR_WIDTH_2
-    channel |= _dilate(wide)
-    channel |= _dilate(_dilate(wider))
+    channel |= _widen(flow >= RIVER_FLOW_FOR_WIDTH_1, steps)
+    channel |= _widen(flow >= RIVER_FLOW_FOR_WIDTH_2, steps * 2)
 
     surface[channel & (surface != Surface.OCEAN)] = Surface.FRESH_WATER
     return len(sources)
@@ -458,8 +482,12 @@ def _lay_beaches(surface: np.ndarray, cfg: WorldConfig, rng: np.random.Generator
         return
 
     grid_x, grid_y = _grid(cfg)
-    jitter = _stretch(_fractal_noise(rng, grid_x, grid_y, BEACH_JITTER_SCALE, 2))
-    width = cfg.shore_width * (BEACH_WIDTH_MIN + (2.0 - 2.0 * BEACH_WIDTH_MIN) * jitter)
+    scale = _feature_scale(cfg)
+    jitter = _stretch(_fractal_noise(rng, grid_x, grid_y, BEACH_JITTER_SCALE * scale, 2))
+    shore = cfg.shore_width * scale
+    # Never thinner than a single cell: at the narrow end of the jitter a small
+    # map would otherwise put forest straight against the sea, with no beach.
+    width = np.maximum(shore * (BEACH_WIDTH_MIN + (2.0 - 2.0 * BEACH_WIDTH_MIN) * jitter), 1.0)
 
     ocean_distance = _distance_to(surface == Surface.OCEAN)
     fresh_distance = _distance_to(surface == Surface.FRESH_WATER)
@@ -467,7 +495,7 @@ def _lay_beaches(surface: np.ndarray, cfg: WorldConfig, rng: np.random.Generator
     # A distance of -1 means "no such water on this map"; requiring at least 1
     # keeps those cells out and stops an absent lake from sanding the island.
     coast = (ocean_distance >= 1) & (ocean_distance <= width)
-    bank = (fresh_distance >= 1) & (fresh_distance <= cfg.shore_width * FRESH_SHORE_RATIO)
+    bank = (fresh_distance >= 1) & (fresh_distance <= max(shore * FRESH_SHORE_RATIO, 1.0))
 
     surface[(surface == Surface.FOREST) & (coast | bank)] = Surface.SAND
 
@@ -492,7 +520,7 @@ def generate(cfg: WorldConfig) -> World:
     surface = _classify(elevation, cfg)
     islands = _drop_small_islands(surface)
     lake_cells = _mark_lakes(surface)
-    streams = _carve_rivers(surface, elevation, random.Random(cfg.seed))
+    streams = _carve_rivers(surface, elevation, cfg, random.Random(cfg.seed))
     _lay_beaches(surface, cfg, rng)
     log.debug("islands=%d  streams=%d  lake cells=%d", islands, streams, lake_cells)
 

@@ -142,6 +142,7 @@ def load_game(path: str | Path) -> tuple[Ecosystem, WorldConfig, list[SpeciesCon
         ent.lifespan = int(d["lifespan"])
         ent.offspring = int(d["offspring"])
         ent.body = Phenotype.of(ent.genome, ent.maturity)
+        ent._fully_grown = ent.maturity >= 1.0
 
     eco = Ecosystem.from_saved(world, entities, int(data["tick_count"]))
     log.info(

@@ -158,7 +158,10 @@ Makefile              dev workflow shortcuts
 
 ## Known gaps
 
-The ecosystem is **not balanced yet**. Reproduction is still unlimited — an
-animal breeds whenever it has the energy — so herbivores overshoot the island's
-carrying capacity, strip the grass and starve. Lifespans, limited breeding and
-predator behaviour arrive in stages 9–11; the tuning pass is stage 14.
+The ecosystem is **not balanced yet**, though it now usually persists: across
+six seeds, five herbivore populations survived 15 000 ticks on a 320×200 map.
+
+Predators are the weak point. A carnivore still feeds by draining energy on
+contact — there is no hunting, no chase and no rest after a kill — so predation
+accounts for about 1% of deaths and carnivores usually die out early. Stage 10
+replaces that model wholesale. The tuning pass is stage 14.

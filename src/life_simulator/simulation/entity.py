@@ -120,6 +120,7 @@ class Entity:
         "offspring",
         "death_cause",
         "_breeding_rest_until",
+        "_fully_grown",
         "_target_x",
         "_target_y",
         "_wander_timer",
@@ -150,6 +151,7 @@ class Entity:
         self.death_cause: DeathCause | None = None
         self.offspring: int = 0
         self._breeding_rest_until: int = 0
+        self._fully_grown: bool = self.maturity >= 1.0
         self.energy: float = energy if energy is not None else self.body.max_energy * 0.4
         # Navigation state.
         self._target_x: float = x
@@ -191,9 +193,14 @@ class Entity:
             A newly born child entity, or ``None``.
         """
         self.age += 1
-        if self.stage is LifeStage.JUVENILE:
-            # Still growing, so its abilities change from tick to tick.
+        if not self._fully_grown:
+            # Still growing, so its abilities change from tick to tick. The
+            # flag rather than the life stage is what stops this: by the tick an
+            # animal turns adult its stage has already flipped, so testing the
+            # stage would skip the last rebuild and leave it a fraction short of
+            # its full body for the rest of its life.
             self.body = Phenotype.of(self.genome, self.maturity)
+            self._fully_grown = self.maturity >= 1.0
 
         self.energy -= self.body.tick_cost
 

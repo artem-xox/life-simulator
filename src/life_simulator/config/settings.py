@@ -124,9 +124,15 @@ ATTACK_RANGE: float = 1.5
 #: Fraction of energy stolen from prey that the attacker keeps.
 ATTACK_EFFICIENCY: float = 0.40
 
-#: Energy given to the newborn as a fraction of parent max_energy.
-#: High value (> 0.5) makes reproduction expensive to slow population growth.
-CHILD_ENERGY_FRACTION: float = 0.65
+#: Energy a parent hands a newborn, as a fraction of the parent's own capacity.
+#: A newborn body cannot hold all of it, so the transfer is clamped to what
+#: fits — see ``Entity._try_reproduce``.
+#:
+#: This was once set high on purpose, to throttle breeding that had no other
+#: limit. The lifecycle's cap of two offspring per life now does that job, and
+#: keeping both brakes left populations clinging on: over six seeds, worlds
+#: surviving 15k ticks went from two to five when it was lowered to this.
+CHILD_ENERGY_FRACTION: float = 0.35
 
 #: Fraction of its maximum energy an animal must hold before it will breed.
 #: A placeholder for the fertility rules of the lifecycle stage.

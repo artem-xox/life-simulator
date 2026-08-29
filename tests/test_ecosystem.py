@@ -75,9 +75,10 @@ def test_reproduction_spawns_child() -> None:
     # Give the entity energy just above its reproduction threshold.
     herb = _herb(world)
     herb.age = round(0.5 * herb.lifespan)  # grown, and inside its fertile window
-    herb.energy = herb.body.max_energy  # definitely above threshold
     spatial = SpatialGrid()
     spatial.rebuild([herb])
+    herb.step(world, spatial)  # lets its grown body settle before energy is set
+    herb.energy = herb.body.max_energy  # definitely above threshold
     child = herb.step(world, spatial)
     assert child is not None
     assert child.diet == Diet.HERBIVORE
@@ -89,10 +90,11 @@ def test_reproduction_reduces_parent_energy() -> None:
     world.grass[:] = 0.0
     herb = _herb(world)
     herb.age = round(0.5 * herb.lifespan)
-    herb.energy = herb.body.max_energy
-    before = herb.energy
     spatial = SpatialGrid()
     spatial.rebuild([herb])
+    herb.step(world, spatial)  # lets its grown body settle before energy is set
+    herb.energy = herb.body.max_energy
+    before = herb.energy
     herb.step(world, spatial)
     assert herb.energy < before
 

@@ -262,3 +262,14 @@ def test_a_parent_only_pays_what_the_child_receives() -> None:
 
     assert child is not None
     assert abs((before - parent.energy) - child.energy) < 1e-9
+
+
+def test_an_animal_reaches_its_full_size_on_becoming_an_adult() -> None:
+    """Growth must not stop a fraction short at the moment the stage flips."""
+    world = _meadow()
+    animal = _animal(size=1.5)
+    while animal.stage is LifeStage.JUVENILE:
+        _step(animal, world)
+    _step(animal, world)
+
+    assert animal.body.body_size == animal.genome.size

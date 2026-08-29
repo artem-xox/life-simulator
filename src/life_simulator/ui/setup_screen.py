@@ -45,8 +45,8 @@ class _Vals:
 
     seed: int = 2026
     water: float = 0.40
-    map_w: int = 160
-    map_h: int = 120
+    map_w: int = 640
+    map_h: int = 400
     h_count: int = 150
     h_speed: float = 1.0
     h_vision: float = 5.0
@@ -160,10 +160,10 @@ class SetupScreen(Screen):
             0, 1, "Water level", v.water, 0.20, 0.70, 0.01, lambda x: f"{x:.2f}"
         )
         self._s_map_w = add_slider(
-            0, 2, "Map width (cells)", float(v.map_w), 80, 320, 16, lambda x: f"{round(x)}"
+            0, 2, "Map width (cells)", float(v.map_w), 240, 1200, 40, lambda x: f"{round(x)}"
         )
         self._s_map_h = add_slider(
-            0, 3, "Map height (cells)", float(v.map_h), 60, 240, 12, lambda x: f"{round(x)}"
+            0, 3, "Map height (cells)", float(v.map_h), 150, 750, 25, lambda x: f"{round(x)}"
         )
 
         # ---- herbivore column (col 1, rows 0-4) -----------------------------

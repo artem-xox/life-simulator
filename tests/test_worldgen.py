@@ -124,9 +124,28 @@ def test_map_has_a_meaningful_amount_of_land() -> None:
 
 
 def test_small_maps_still_produce_a_living_island() -> None:
-    """The setup screen allows maps down to 80 cells wide."""
+    """The setup screen allows maps well below the default size."""
     world = _island(5, width=80, height=60)
     assert float(world.walkable_mask().mean()) > 0.15
+
+
+def test_raising_the_resolution_keeps_the_same_kind_of_island() -> None:
+    """A finer map is the same world in more detail, not a different one.
+
+    Terrain features are measured in cells, so without scaling them against the
+    map size a bigger map would simply fit more, smaller islands into the same
+    frame. Composition holding steady is what says the scaling works.
+    """
+
+    def composition(width: int, height: int) -> dict[Surface, float]:
+        surface = generate(WorldConfig(seed=2026, width=width, height=height)).surface
+        return {s: float((surface == s).mean()) for s in Surface}
+
+    coarse = composition(200, 150)
+    fine = composition(600, 450)
+
+    for kind, share in coarse.items():
+        assert abs(share - fine[kind]) < 0.05, kind
 
 
 # --- Mountains -------------------------------------------------------------
@@ -216,17 +235,17 @@ def test_shore_width_controls_how_much_sand() -> None:
     assert sand_fraction(8.0) > sand_fraction(3.0) > 0.0
 
 
-def test_food_grows_only_in_forest() -> None:
+def test_grass_grows_only_in_forest() -> None:
     world = generate(WorldConfig(seed=9, width=48, height=48))
-    assert np.all(world.food_max[world.surface != Surface.FOREST] == 0.0)
-    assert np.all(world.food_max[world.surface == Surface.FOREST] > 0.0)
+    assert np.all(world.grass_max[world.surface != Surface.FOREST] == 0.0)
+    assert np.all(world.grass_max[world.surface == Surface.FOREST] > 0.0)
 
 
-def test_food_starts_below_capacity() -> None:
+def test_grass_starts_below_capacity() -> None:
     world = generate(WorldConfig(seed=9, width=48, height=48))
-    # World starts at 60 % of capacity to slow the initial population burst.
-    assert np.all(world.food <= world.food_max)
-    assert np.any(world.food > 0)
+    # World starts below capacity to slow the initial population burst.
+    assert np.all(world.grass <= world.grass_max)
+    assert np.any(world.grass > 0)
 
 
 def test_water_is_not_walkable() -> None:

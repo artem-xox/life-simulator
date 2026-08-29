@@ -19,6 +19,7 @@ import logging  # noqa: E402  (after log setup)
 import pygame  # noqa: E402
 
 from life_simulator.config.settings import (  # noqa: E402
+    START_FULLSCREEN,
     TARGET_FPS,
     WINDOW_HEIGHT,
     WINDOW_TITLE,
@@ -28,6 +29,25 @@ from life_simulator.ui.screen import ScreenManager  # noqa: E402
 from life_simulator.ui.setup_screen import SetupScreen  # noqa: E402
 
 log = logging.getLogger(__name__)
+
+
+def _open_display(fullscreen: bool) -> pygame.Surface:
+    """Open (or reopen) the window, either fullscreen or windowed.
+
+    Fullscreen asks for size ``(0, 0)``, which hands SDL the desktop and gets a
+    borderless window the size of the usable screen. On macOS that means the
+    menu bar is hidden and the app gets its own Space — a borderless window at
+    the raw desktop size would instead be overlapped by the menu bar, hiding
+    the top of the HUD.
+    """
+    if fullscreen:
+        surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    else:
+        surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
+
+    log.info("opening display  %dx%d  fullscreen=%s", *surface.get_size(), fullscreen)
+    return surface
+
 
 # ---------------------------------------------------------------------------
 # Main loop
@@ -41,15 +61,15 @@ def main() -> None:
     result = pygame.init()
     log.info("pygame.init() done  success=%d  failed=%d", result[0], result[1])
 
-    log.info("creating display  %dx%d...", WINDOW_WIDTH, WINDOW_HEIGHT)
     pygame.display.set_caption(WINDOW_TITLE)
-    surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
+    fullscreen = START_FULLSCREEN
+    surface = _open_display(fullscreen)
     log.info("display created  driver=%s", pygame.display.get_driver())
 
     clock = pygame.time.Clock()
 
     log.info("building SetupScreen...")
-    manager = ScreenManager(SetupScreen(WINDOW_WIDTH, WINDOW_HEIGHT))
+    manager = ScreenManager(SetupScreen(*surface.get_size()))
     log.info("entering main loop  target_fps=%d", TARGET_FPS)
 
     frame = 0
@@ -62,10 +82,14 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 log.info("QUIT event received")
                 running = False
-            elif event.type == pygame.VIDEORESIZE:
+            elif event.type == pygame.VIDEORESIZE and not fullscreen:
                 log.info("window resized to %dx%d", event.w, event.h)
                 surface = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
                 manager.resize(event.w, event.h)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                fullscreen = not fullscreen
+                surface = _open_display(fullscreen)
+                manager.resize(*surface.get_size())
 
         manager.handle_events(events)
         manager.update(dt)

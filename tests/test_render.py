@@ -27,10 +27,10 @@ def test_grazed_forest_looks_drier_than_lush_forest() -> None:
     for elevation in (0.1, 0.5, 0.95):
         world = _flat_world(Surface.FOREST, elevation)
 
-        world.food[:] = world.food_max
+        world.grass[:] = world.grass_max
         lush = _shade(world).mean(axis=(0, 1))
 
-        world.food[:] = 0.0
+        world.grass[:] = 0.0
         bare = _shade(world).mean(axis=(0, 1))
 
         # "Greenness" is how far green runs ahead of red; grazing must drop it

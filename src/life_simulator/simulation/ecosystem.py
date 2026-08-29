@@ -1,7 +1,7 @@
 """Ecosystem: the top-level simulation object that orchestrates each tick.
 
 One tick:
-  1. Regrow food on the world grid.
+  1. Regrow grass on the world grid.
   2. Rebuild the spatial index from living entities.
   3. Step every living entity (they may die or spawn children).
   4. Collect children; remove dead entities.
@@ -48,7 +48,7 @@ class Ecosystem:
     """Holds the world and all entities; drives the simulation loop.
 
     Attributes:
-        world: the surface and food grid.
+        world: the surface and grass grid.
         entities: all currently living entities.
         tick_count: total simulation ticks elapsed.
     """
@@ -148,7 +148,7 @@ class Ecosystem:
 
     def tick(self) -> None:
         """Advance the simulation by one step."""
-        self.world.regrow_food()
+        self.world.regrow()
         self.spatial.rebuild(self.entities)
 
         newborns: list[Entity] = []

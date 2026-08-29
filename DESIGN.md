@@ -87,9 +87,16 @@ Deterministic from a single seed:
    narrower strip: a full-width beach along every stream would cost more
    grazing than it is worth.
 
-Default map ≈ 320×200 cells (configurable); the window opens full-screen and
-the camera fits the island on start. Generation is pure numpy and takes tens of
-milliseconds, so a new world is effectively instant even at large sizes.
+Default map is 640×400 cells, adjustable up to 1200×750. On a full-screen
+window that is roughly two pixels per cell, fine enough that terrain reads as
+landscape rather than as tiles — the earlier 160×120 default drew every cell as
+an eight-pixel block.
+
+Everything measured in cells — noise feature sizes, warp distance, beach and
+river widths — is scaled against a reference map size, so raising the
+resolution renders *the same island in more detail* rather than fitting more,
+smaller islands into the frame. Generation is pure numpy: about 360 ms at the
+default size.
 
 ### Grass
 
@@ -274,8 +281,15 @@ loose packs or lone hunting depending on prey density.
 
 ### Window & map
 
-- Full-screen (borderless desktop resolution) by default, resizable; the map is
-  large and the camera fits the island on start. Pan/zoom as in v1.
+- Full-screen by default (`F11` toggles a resizable window); the camera fits the
+  island on start. Pan/zoom as in v1.
+- Fullscreen asks SDL for the desktop, which on macOS hides the menu bar and
+  gives the app its own Space. A borderless window at the raw desktop size looks
+  equivalent but sits *under* the menu bar, which clips the top of the HUD.
+- Rendering happens at the window's logical resolution. On a Retina display
+  macOS upscales that to the panel; pygame-ce exposes no way to request a
+  high-DPI drawable, so the practical route to a sharper map is more cells, not
+  more pixels.
 
 ### Procedural animal sprites
 

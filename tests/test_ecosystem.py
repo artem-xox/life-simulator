@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from life_simulator.config.settings import ATTACK_RANGE, MAX_AGE, Surface
+from life_simulator.config.settings import ATTACK_RANGE, Surface
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
 from life_simulator.simulation.entity import Diet, Entity
 from life_simulator.simulation.genome import Genome
@@ -62,7 +62,7 @@ def test_old_entity_dies() -> None:
     world = _small_world()
     world.grass[:] = world.grass_max
     herb = _herb(world, energy=20.0)
-    herb.age = MAX_AGE  # one more tick will tip it over
+    herb.age = herb.lifespan - 1  # one more tick will tip it over
     spatial = SpatialGrid()
     spatial.rebuild([herb])
     herb.step(world, spatial)
@@ -74,6 +74,7 @@ def test_reproduction_spawns_child() -> None:
     world.grass[:] = world.grass_max
     # Give the entity energy just above its reproduction threshold.
     herb = _herb(world)
+    herb.age = round(0.5 * herb.lifespan)  # grown, and inside its fertile window
     herb.energy = herb.body.max_energy  # definitely above threshold
     spatial = SpatialGrid()
     spatial.rebuild([herb])
@@ -87,6 +88,7 @@ def test_reproduction_reduces_parent_energy() -> None:
     world = _small_world()
     world.grass[:] = 0.0
     herb = _herb(world)
+    herb.age = round(0.5 * herb.lifespan)
     herb.energy = herb.body.max_energy
     before = herb.energy
     spatial = SpatialGrid()

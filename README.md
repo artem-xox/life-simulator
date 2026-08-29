@@ -14,8 +14,9 @@ See [DESIGN.md](DESIGN.md) for the design and [PLAN.md](PLAN.md) for the roadmap
 | 0–6 | v1: world, entities, asexual evolution, setup screen, stats, save/load | ✅ done |
 | 7 | Map 2.0: island with rivers, lakes, beaches and mountains; grass layer; full-screen | ✅ done |
 | 8 | Genome 2.0: new gene set, phenotype trade-offs, crossover | ✅ done |
-| 9 | Lifecycle: juveniles, limited breeding, causes of death | ⬜ next |
-| 10–14 | Behaviour, mating, sprites, analytics, balance | ⬜ todo |
+| 9 | Lifecycle: juveniles, limited breeding, causes of death | ✅ done |
+| 10 | Behaviour: hunt/rest modes, stealth detection, chases | ⬜ next |
+| 11–14 | Mating, sprites, analytics, balance | ⬜ todo |
 
 ## The world
 
@@ -31,6 +32,19 @@ One temperate island in an ocean, generated deterministically from a seed.
 
 Water and rock are both hard obstacles: animals can neither swim nor climb, so
 ranges and rivers have to be walked around.
+
+## Life
+
+An animal is born at 40% of the size its genes call for, and small and clumsy
+enough to be easy prey. It grows up over the first fifth of its life, breeds at
+most twice inside a window in the middle of it, and dies of exactly one of three
+things: starvation, old age, or being eaten.
+
+Its genes — size, speed, stealth, vision, sociality and mutation rate — mutate
+independently, but what a body can actually *do* is derived from them with
+physical trade-offs. Growing large banks a reserve that outgrows the body and
+costs less upkeep per unit of itself, and pays for it in pace, concealment and
+absolute upkeep. Click any animal to see its genes beside the body they made.
 
 Grass grows only in the forest, and it grows *logistically* — from what is
 still standing, fastest at middling density. A cell grazed to bare earth has

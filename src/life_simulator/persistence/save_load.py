@@ -23,12 +23,13 @@ import numpy as np
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
 from life_simulator.simulation.entity import Diet, Entity
 from life_simulator.simulation.genome import Genome
+from life_simulator.simulation.phenotype import Phenotype
 from life_simulator.simulation.worldgen import WorldConfig, generate
 
 log = logging.getLogger(__name__)
 
 #: Bumped whenever the on-disk format changes incompatibly.
-SAVE_VERSION = 4
+SAVE_VERSION = 5
 
 #: Default save file used by the in-game save/load hotkeys.
 DEFAULT_SAVE_PATH = Path("life_sim_save.json")
@@ -49,6 +50,8 @@ def _entity_to_dict(e: Entity) -> dict:
         "y": round(e.y, 4),
         "energy": round(e.energy, 4),
         "age": e.age,
+        "lifespan": e.lifespan,
+        "offspring": e.offspring,
         "diet": int(e.diet),
         "genome": _genome_to_dict(e.genome),
     }
@@ -131,8 +134,14 @@ def load_game(path: str | Path) -> tuple[Ecosystem, WorldConfig, list[SpeciesCon
         )
         for d in data["entities"]
     ]
+    # Age and lifespan are restored together: an animal's stage, fertility and
+    # remaining life are all read off the pair, so setting one without the
+    # other would quietly rejuvenate it.
     for ent, d in zip(entities, data["entities"], strict=True):
         ent.age = int(d["age"])
+        ent.lifespan = int(d["lifespan"])
+        ent.offspring = int(d["offspring"])
+        ent.body = Phenotype.of(ent.genome, ent.maturity)
 
     eco = Ecosystem.from_saved(world, entities, int(data["tick_count"]))
     log.info(

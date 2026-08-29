@@ -15,13 +15,15 @@ hunting, which is exactly the question the simulation exists to ask.
 The relationships:
 
 ======================  ============================================
+``body_size``           ``size · f(maturity)`` — juveniles are the same
+                        genes in a smaller body
 ``max_energy``          ``E · size^1.2`` — reserves outgrow the body
 ``tick_cost``           ``C · size^0.75`` — Kleiber's law
 ``speed``               ``gene / size^0.4`` — mass drags
 ``travel_cost``         ``T · size^0.75`` — charged per cell moved
 ``sprint_cost``         ``tick_cost · K · speed^2`` — quadratic in pace
 ``stealth``             ``gene − P · (size − 1)`` — bulk is conspicuous
-``escape_power``        ``size`` — leverage against a predator
+``escape_power``        ``body · coordination`` — leverage against a predator
 ======================  ============================================
 """
 
@@ -35,6 +37,8 @@ from life_simulator.config.settings import (
     MAX_ENERGY_BASE,
     MAX_STEALTH,
     METABOLIC_SIZE_EXPONENT,
+    NEWBORN_COORDINATION,
+    NEWBORN_SIZE_FRACTION,
     SPEED_SIZE_EXPONENT,
     SPRINT_COST_FACTOR,
     STEALTH_SIZE_PENALTY,
@@ -71,17 +75,23 @@ class Phenotype:
     escape_power: float
 
     @classmethod
-    def of(cls, genome: Genome, growth: float = 1.0) -> Phenotype:
-        """Derive the phenotype of ``genome`` in a body ``growth`` of full size.
+    def of(cls, genome: Genome, maturity: float = 1.0) -> Phenotype:
+        """Derive the phenotype of ``genome`` at a given stage of development.
 
         Args:
-            growth: how far the animal has grown, from 0 to 1. Juveniles are
-                built from the same genes in a smaller body, and so are slower,
-                cheaper to run, and easier to catch.
+            maturity: how far the animal has grown up, from 0 at birth to 1 at
+                adulthood. A juvenile is the same genes in a smaller, clumsier
+                body: cheaper to run, but slower and easier to catch. Note that
+                being light would make it quick — it is the coordination term
+                that makes it catchable, which is why growing up is modelled as
+                two things and not one.
         """
-        body = genome.size * growth
+        grown = min(1.0, max(0.0, maturity))
+        body = genome.size * (NEWBORN_SIZE_FRACTION + (1.0 - NEWBORN_SIZE_FRACTION) * grown)
+        coordination = NEWBORN_COORDINATION + (1.0 - NEWBORN_COORDINATION) * grown
+
         tick_cost = BASE_ENERGY_COST * body**METABOLIC_SIZE_EXPONENT
-        speed = genome.speed / body**SPEED_SIZE_EXPONENT
+        speed = coordination * genome.speed / body**SPEED_SIZE_EXPONENT
 
         # Concealment is judged against a full-grown body: a small animal is
         # hard to see because it is small, whatever its genes say.
@@ -95,5 +105,5 @@ class Phenotype:
             travel_cost=TRAVEL_ENERGY_FACTOR * body**METABOLIC_SIZE_EXPONENT,
             sprint_cost=tick_cost * SPRINT_COST_FACTOR * speed**2,
             stealth=min(MAX_STEALTH, max(0.0, stealth)),
-            escape_power=body,
+            escape_power=body * coordination,
         )

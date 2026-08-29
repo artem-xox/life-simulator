@@ -23,10 +23,17 @@ from life_simulator.config.settings import (
     ATTACK_DAMAGE,
     ATTACK_EFFICIENCY,
     ATTACK_RANGE,
+    BREEDING_COOLDOWN_FRACTION,
     CHILD_ENERGY_FRACTION,
+    FERTILITY_END_FRACTION,
+    FERTILITY_START_FRACTION,
     GRAZE_AMOUNT,
     GRAZE_ENERGY_GAIN,
-    MAX_AGE,
+    JUVENILE_FRACTION,
+    JUVENILE_PREY_VALUE,
+    LIFESPAN_BASE,
+    LIFESPAN_VARIATION,
+    MAX_OFFSPRING,
     REPRODUCTION_THRESHOLD,
     WANDER_INTERVAL,
 )
@@ -45,6 +52,21 @@ if TYPE_CHECKING:
 class Diet(IntEnum):
     HERBIVORE = 0
     CARNIVORE = 1
+
+
+class DeathCause(IntEnum):
+    """Why an animal died. There are only three ways out of this world."""
+
+    STARVATION = 0
+    OLD_AGE = 1
+    PREDATION = 2
+
+
+class LifeStage(IntEnum):
+    """Whether an animal has finished growing up."""
+
+    JUVENILE = 0
+    ADULT = 1
 
 
 #: Headings an entity tries, in order, when its direct path is blocked by water
@@ -74,11 +96,15 @@ class Entity:
         x, y: floating-point position in world cells (origin at top-left).
         energy: current energy; death occurs at or below zero.
         age: number of ticks since birth.
-        alive: False after the entity has died (natural or predation).
+        alive: False after the entity has died.
+        death_cause: why it died, or None while it lives.
         diet: HERBIVORE or CARNIVORE — determines feeding behaviour.
         genome: heritable traits; passed (with mutation) to offspring.
         body: the abilities those genes yield — speed, upkeep, reserves and
             concealment, all derived with the trade-offs of carrying a body.
+            It is rebuilt as a juvenile grows, then settles.
+        lifespan: age in ticks at which this individual dies of old age.
+        offspring: how many young it has already had, capped at MAX_OFFSPRING.
     """
 
     __slots__ = (
@@ -90,6 +116,10 @@ class Entity:
         "diet",
         "genome",
         "body",
+        "lifespan",
+        "offspring",
+        "death_cause",
+        "_breeding_rest_until",
         "_target_x",
         "_target_y",
         "_wander_timer",
@@ -103,14 +133,23 @@ class Entity:
         diet: Diet,
         genome: Genome,
         energy: float | None = None,
+        age: int = 0,
     ) -> None:
         self.x = x
         self.y = y
         self.diet = diet
         self.genome = genome
-        self.body = Phenotype.of(genome)
-        self.age: int = 0
+        self.age = age
+        # No two animals get exactly the same span, so a cohort born together
+        # does not also die together and leave the world briefly empty.
+        self.lifespan: int = round(
+            LIFESPAN_BASE * (1.0 + random.uniform(-LIFESPAN_VARIATION, LIFESPAN_VARIATION))
+        )
+        self.body = Phenotype.of(genome, self.maturity)
         self.alive: bool = True
+        self.death_cause: DeathCause | None = None
+        self.offspring: int = 0
+        self._breeding_rest_until: int = 0
         self.energy: float = energy if energy is not None else self.body.max_energy * 0.4
         # Navigation state.
         self._target_x: float = x
@@ -118,6 +157,30 @@ class Entity:
         self._wander_timer: int = 0
         # Which way this individual prefers to turn around an obstacle.
         self._turn_bias: float = 1.0 if random.random() < 0.5 else -1.0
+
+    # --- Life stage -------------------------------------------------------- #
+
+    @property
+    def maturity(self) -> float:
+        """How far this animal has grown up, from 0 at birth to 1 at adulthood."""
+        growing_until = JUVENILE_FRACTION * self.lifespan
+        if growing_until <= 0.0:
+            return 1.0
+        return min(1.0, self.age / growing_until)
+
+    @property
+    def stage(self) -> LifeStage:
+        return LifeStage.ADULT if self.maturity >= 1.0 else LifeStage.JUVENILE
+
+    @property
+    def prey_value(self) -> float:
+        """Multiplier on the energy a predator gets from eating this animal."""
+        return 1.0 if self.stage is LifeStage.ADULT else JUVENILE_PREY_VALUE
+
+    def die(self, cause: DeathCause) -> None:
+        """Mark this animal dead, recording why."""
+        self.alive = False
+        self.death_cause = cause
 
     # --- Main update ------------------------------------------------------- #
 
@@ -128,10 +191,17 @@ class Entity:
             A newly born child entity, or ``None``.
         """
         self.age += 1
+        if self.stage is LifeStage.JUVENILE:
+            # Still growing, so its abilities change from tick to tick.
+            self.body = Phenotype.of(self.genome, self.maturity)
+
         self.energy -= self.body.tick_cost
 
-        if self.energy <= 0.0 or self.age > MAX_AGE:
-            self.alive = False
+        if self.energy <= 0.0:
+            self.die(DeathCause.STARVATION)
+            return None
+        if self.age >= self.lifespan:
+            self.die(DeathCause.OLD_AGE)
             return None
 
         if self.diet == Diet.HERBIVORE:
@@ -199,9 +269,10 @@ class Entity:
         damage = ATTACK_DAMAGE * min(size_ratio, 2.0)
         stolen = min(prey.energy, damage)
         prey.energy -= stolen
+        gained = stolen * ATTACK_EFFICIENCY * prey.prey_value
         if prey.energy <= 0.0:
-            prey.alive = False
-        self.energy = min(self.body.max_energy, self.energy + stolen * ATTACK_EFFICIENCY)
+            prey.die(DeathCause.PREDATION)
+        self.energy = min(self.body.max_energy, self.energy + gained)
 
     # --- Shared movement --------------------------------------------------- #
 
@@ -250,13 +321,41 @@ class Entity:
 
     # --- Reproduction ------------------------------------------------------ #
 
+    def _can_breed(self) -> bool:
+        """Whether this animal is in a position to have young right now.
+
+        Four gates, and every one of them matters to the shape of a population:
+        it has to be grown, inside the fertile middle of its life, rested since
+        its last birth, and not already at its lifetime limit.
+        """
+        if self.offspring >= MAX_OFFSPRING:
+            return False
+        if self.age < FERTILITY_START_FRACTION * self.lifespan:
+            return False
+        if self.age > FERTILITY_END_FRACTION * self.lifespan:
+            return False
+        return self.age >= self._breeding_rest_until
+
     def _try_reproduce(self, world: World) -> Entity | None:
+        if not self._can_breed():
+            return None
         if self.energy < REPRODUCTION_THRESHOLD * self.body.max_energy:
             return None
-        child_energy = CHILD_ENERGY_FRACTION * self.body.max_energy
-        self.energy -= child_energy
+
         cx, cy = self._birth_spot(world)
-        return Entity(cx, cy, self.diet, self.genome.mutate(), child_energy)
+        child = Entity(cx, cy, self.diet, self.genome.mutate())
+
+        # A newborn body is a fraction of its parent's and cannot hold a
+        # parent-sized share of energy. Transferring the full share regardless
+        # would start it at nearly twice its own capacity — an invariant every
+        # other path respects — so the parent only gives what fits.
+        given = min(CHILD_ENERGY_FRACTION * self.body.max_energy, child.body.max_energy)
+        child.energy = given
+        self.energy -= given
+
+        self.offspring += 1
+        self._breeding_rest_until = self.age + round(BREEDING_COOLDOWN_FRACTION * self.lifespan)
+        return child
 
     def _birth_spot(self, world: World) -> tuple[float, float]:
         """Find somewhere beside the parent to put a newborn.

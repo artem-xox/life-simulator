@@ -7,8 +7,6 @@ costs on both sides, so no gene is simply better than its alternatives.
 
 from __future__ import annotations
 
-import pytest
-
 from life_simulator.config.settings import MAX_STEALTH
 from life_simulator.simulation.genome import Genome
 from life_simulator.simulation.phenotype import Phenotype
@@ -104,19 +102,36 @@ def test_sprinting_costs_more_than_standing_still() -> None:
 # --- Growth ----------------------------------------------------------------
 
 
-def test_a_juvenile_is_a_smaller_version_of_its_genes() -> None:
-    """Half-grown means half the body, with every consequence that follows."""
-    grown = Phenotype.of(Genome(size=2.0), growth=1.0)
-    young = Phenotype.of(Genome(size=2.0), growth=0.5)
+def test_a_juvenile_is_a_smaller_weaker_version_of_its_genes() -> None:
+    grown = Phenotype.of(Genome(size=2.0), maturity=1.0)
+    young = Phenotype.of(Genome(size=2.0), maturity=0.0)
 
-    assert young.body_size == pytest.approx(grown.body_size / 2)
+    assert young.body_size < grown.body_size
     assert young.max_energy < grown.max_energy
     assert young.tick_cost < grown.tick_cost
     assert young.escape_power < grown.escape_power
-    assert young.speed > grown.speed  # a lighter body is quicker for its genes
+
+
+def test_a_juvenile_is_slower_despite_being_light() -> None:
+    """Being light would make it quick; being uncoordinated is what makes it prey."""
+    grown = Phenotype.of(Genome(size=1.0), maturity=1.0)
+    young = Phenotype.of(Genome(size=1.0), maturity=0.0)
+
+    assert young.speed < grown.speed
+
+
+def test_growing_up_is_monotonic() -> None:
+    sizes = [Phenotype.of(Genome(size=1.5), maturity=m).body_size for m in (0.0, 0.3, 0.7, 1.0)]
+    assert _ordered(sizes)
+
+
+def test_maturity_outside_zero_to_one_is_clamped() -> None:
+    genome = Genome(size=1.5)
+    assert Phenotype.of(genome, maturity=2.0) == Phenotype.of(genome, maturity=1.0)
+    assert Phenotype.of(genome, maturity=-1.0) == Phenotype.of(genome, maturity=0.0)
 
 
 def test_growth_does_not_change_the_genes() -> None:
     genome = Genome(size=2.0)
-    Phenotype.of(genome, growth=0.4)
+    Phenotype.of(genome, maturity=0.4)
     assert genome.size == 2.0

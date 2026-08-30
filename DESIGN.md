@@ -203,9 +203,14 @@ JUVENILE                     ADULT
 
 - **Lifespan**: species constant ± 10% individual variation (seeded RNG).
 - **Juvenile** (first 20% of life): body grows from 0.4× to 1.0× of genetic
-  size; cannot reproduce; reduced speed and `escape_power` (easy prey); worth
-  less energy to a predator; **stays with family** — strong steering pull
-  toward its parents.
+  size; cannot reproduce; worth less energy to a predator; **stays with
+  family** — strong steering pull toward its parents.
+
+  Growing up is modelled as *two* things, not one, because size alone gives the
+  wrong answer: a lighter body would make a juvenile **faster** under the
+  phenotype's own rules. So maturity also carries a coordination term that
+  scales speed and `escape_power`. Being small is what makes a juvenile cheap
+  to run; being uncoordinated is what makes it catchable.
 - **Adult**: may reproduce inside a fertility window (20%–80% of life),
   at most **2 times per life**, with a cooldown of ~25% of lifespan after each
   child — so 1–2 offspring per life emerges naturally.

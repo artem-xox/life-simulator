@@ -124,19 +124,64 @@ ATTACK_RANGE: float = 1.5
 #: Fraction of energy stolen from prey that the attacker keeps.
 ATTACK_EFFICIENCY: float = 0.40
 
-#: Energy given to the newborn as a fraction of parent max_energy.
-#: High value (> 0.5) makes reproduction expensive to slow population growth.
-CHILD_ENERGY_FRACTION: float = 0.65
+#: Energy a parent hands a newborn, as a fraction of the parent's own capacity.
+#: A newborn body cannot hold all of it, so the transfer is clamped to what
+#: fits — see ``Entity._try_reproduce``.
+#:
+#: This was once set high on purpose, to throttle breeding that had no other
+#: limit. The lifecycle's cap of two offspring per life now does that job, so a
+#: high value here brakes the population a second time: parents drop too low to
+#: survive their own young, and worlds that should persist dwindle instead.
+#: Raise it only alongside a reason the offspring cap no longer holds.
+CHILD_ENERGY_FRACTION: float = 0.35
 
 #: Fraction of its maximum energy an animal must hold before it will breed.
 #: A placeholder for the fertility rules of the lifecycle stage.
 REPRODUCTION_THRESHOLD: float = 0.78
 
-#: Hard upper limit on age in ticks.
-MAX_AGE: int = 700
-
 #: Ticks between choosing a new random wander target.
 WANDER_INTERVAL: int = 10
+
+
+# --- Lifecycle --------------------------------------------------------------
+# An animal is born small and helpless, grows into an adult, breeds once or
+# twice inside a window in the middle of its life, and dies of old age if
+# nothing eats it first.
+
+#: Typical lifespan in ticks, before individual variation.
+LIFESPAN_BASE: int = 700
+
+#: Individual lifespan varies by up to this fraction either way, so a cohort
+#: born together does not die together.
+LIFESPAN_VARIATION: float = 0.10
+
+#: Fraction of a life spent growing up. Until then the animal is a juvenile:
+#: small, clumsy, barred from breeding, and easy prey.
+JUVENILE_FRACTION: float = 0.20
+
+#: A newborn's body as a fraction of the size its genes call for.
+NEWBORN_SIZE_FRACTION: float = 0.40
+
+#: A newborn's pace as a fraction of what its body would otherwise manage.
+#: Being light makes a juvenile quick in principle; being uncoordinated is what
+#: actually makes it catchable.
+NEWBORN_COORDINATION: float = 0.55
+
+#: Energy a predator gets from a juvenile, relative to a grown animal of the
+#: same body — there is simply less on it.
+JUVENILE_PREY_VALUE: float = 0.6
+
+#: Most offspring an animal can ever have.
+MAX_OFFSPRING: int = 2
+
+#: Fertility window as fractions of a lifetime. Breeding starts at adulthood
+#: and stops well before old age.
+FERTILITY_START_FRACTION: float = 0.20
+FERTILITY_END_FRACTION: float = 0.80
+
+#: Rest between births, as a fraction of a lifetime. With the window above,
+#: this is what holds a life to one or two offspring rather than a burst.
+BREEDING_COOLDOWN_FRACTION: float = 0.25
 
 
 # --- Phenotype: how genes become abilities ----------------------------------

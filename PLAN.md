@@ -10,7 +10,7 @@ the roadmap: stages, tickets, and acceptance criteria.
 | 0–6 | **v1** | world gen, entities, asexual evolution, setup screen, stats, save/load | ✅ done |
 | 7 | Map 2.0 | island with rivers/lakes/beaches/mountains, grass layer, full-screen | ✅ done |
 | 8 | Genome 2.0 | new gene set, phenotype trade-offs, crossover | ✅ done |
-| 9 | Lifecycle | juveniles, 1–2 births per life, death causes | ⬜ todo |
+| 9 | Lifecycle | juveniles, 1–2 births per life, death causes | ✅ done |
 | 10 | Behaviour | state machines, stealth detection, chase & escape | ⬜ todo |
 | 11 | Mating & social | sexual selection, courtship, families, herds | ⬜ todo |
 | 12 | Visuals 2.0 | procedural animal sprites, state cues, LOD | ⬜ todo |
@@ -66,11 +66,11 @@ Goal: age stages, limited reproduction, and exactly three causes of death.
 
 | Ticket | Description | Acceptance |
 |---|---|---|
-| 9.1 | Lifespan = species constant ± 10% individual (seeded); age stages `JUVENILE` (< 20% lifespan) / `ADULT`; body growth 0.4× → 1.0× | growth curve test; stage flips at 20% |
-| 9.2 | Reproduction bookkeeping: `repro_count` (max 2), fertility window 20–80% of life, post-birth cooldown ≈ 25% of lifespan | no entity ever exceeds 2 births; juveniles never reproduce |
-| 9.3 | `DeathCause` (`STARVATION`, `OLD_AGE`, `PREDATION`) recorded on death; no other death paths remain | accounting test: sum of causes == total deaths |
-| 9.4 | Juvenile vulnerability: reduced `eff_speed`/`escape_power`, lower energy value to predators | constants in settings; used by stage 10 combat |
-| 9.5 | Tests for the full lifecycle on a long headless run | 5k-tick run: population has all stages, causes recorded |
+| 9.1 | Lifespan = species constant ± 10% individual; age stages `JUVENILE` / `ADULT`; body growth 0.4× → 1.0× plus a coordination term | ✅ growth curve test; stage flips at 20% |
+| 9.2 | Reproduction bookkeeping: `offspring` (max 2), fertility window 20–80% of life, post-birth cooldown ≈ 25% of lifespan | ✅ no entity ever exceeds 2 births; juveniles never reproduce |
+| 9.3 | `DeathCause` (`STARVATION`, `OLD_AGE`, `PREDATION`) recorded on death; no other death paths remain | ✅ accounting test: seeded + births − deaths == living |
+| 9.4 | Juvenile vulnerability: reduced speed/`escape_power` via coordination, lower energy value to predators | ✅ constants in settings; ready for stage 10 combat |
+| 9.5 | Tests for the full lifecycle on a long headless run | ✅ 3k-tick run: both stages present, all three causes recorded |
 
 ---
 

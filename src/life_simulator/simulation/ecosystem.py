@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from life_simulator.simulation.entity import Diet, Entity
+from life_simulator.config.settings import FERTILITY_END_FRACTION, LIFESPAN_BASE
+from life_simulator.simulation.entity import DeathCause, Diet, Entity
 from life_simulator.simulation.genome import Genome
 from life_simulator.simulation.spatial import SpatialGrid
 from life_simulator.simulation.stats import Stats
@@ -51,6 +52,8 @@ class Ecosystem:
         world: the surface and grass grid.
         entities: all currently living entities.
         tick_count: total simulation ticks elapsed.
+        births: running count of young actually admitted to the world.
+        deaths: running count of how many animals died of each cause.
     """
 
     # Hard cap on total living entities. When the cap is reached, newborns are
@@ -71,6 +74,8 @@ class Ecosystem:
         self.spatial = SpatialGrid()
         self.tick_count: int = 0
         self.stats = Stats()
+        self.births: int = 0
+        self.deaths: dict[DeathCause, int] = dict.fromkeys(DeathCause, 0)
 
     @classmethod
     def create(
@@ -160,12 +165,21 @@ class Ecosystem:
                 newborns.append(child)
 
         # Remove dead entities first, then admit newborns up to the cap.
-        self.entities = [e for e in self.entities if e.alive]
+        survivors: list[Entity] = []
+        for entity in self.entities:
+            if entity.alive:
+                survivors.append(entity)
+            elif entity.death_cause is not None:
+                self.deaths[entity.death_cause] += 1
+        self.entities = survivors
         slots = max(0, self.ENTITY_CAP - len(self.entities))
         if slots and newborns:
             if len(newborns) > slots:
                 random.shuffle(newborns)
                 newborns = newborns[:slots]
+            # Counted on admission, not on conception: young turned away at the
+            # cap never enter the world, so they never leave it either.
+            self.births += len(newborns)
             self.entities.extend(newborns)
         self.tick_count += 1
 
@@ -195,6 +209,12 @@ class Ecosystem:
             log.warning("no walkable cells — no entities will be spawned")
             return
 
+        # Ages are spread across the fertile part of a life rather than all
+        # starting at zero. A world seeded with one synchronised cohort would
+        # grow up, breed and die in lockstep, and the oscillation that produced
+        # would be an artefact of the setup rather than anything ecological.
+        oldest_at_start = round(FERTILITY_END_FRACTION * LIFESPAN_BASE)
+
         for spec in species:
             positions = random.choices(walkable, k=spec.count)
             for px, py in positions:
@@ -204,6 +224,7 @@ class Ecosystem:
                         y=float(py) + random.random(),
                         diet=spec.diet,
                         genome=spec.genome.copy(),
+                        age=random.randrange(oldest_at_start),
                     )
                 )
             log.debug(

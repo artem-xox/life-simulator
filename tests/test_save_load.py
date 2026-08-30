@@ -72,3 +72,21 @@ def test_loaded_world_terrain_is_reproducible(tmp_path) -> None:
 
     # Terrain is regenerated from the seed, so surfaces must match exactly.
     assert np.array_equal(loaded.world.surface, eco.world.surface)
+
+
+def test_lifecycle_state_survives_a_round_trip(tmp_path) -> None:
+    """Age alone is not enough: stage and fertility read off age and lifespan."""
+    eco, world_cfg, species = _make_ecosystem()
+    for entity in eco.entities[:5]:
+        entity.offspring = 1
+    path = tmp_path / "save.json"
+    save_game(path, eco, world_cfg, species)
+
+    loaded, _, _ = load_game(path)
+
+    for restored, original in zip(loaded.entities, eco.entities, strict=True):
+        assert restored.age == original.age
+        assert restored.lifespan == original.lifespan
+        assert restored.offspring == original.offspring
+        assert restored.stage is original.stage
+        assert restored.body.body_size == original.body.body_size

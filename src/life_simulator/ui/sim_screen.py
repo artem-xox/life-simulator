@@ -27,7 +27,7 @@ import random
 
 import pygame
 
-from life_simulator.config.settings import BACKGROUND_COLOR, MAX_AGE, SIM_SPEED_OPTIONS
+from life_simulator.config.settings import BACKGROUND_COLOR, MAX_OFFSPRING, SIM_SPEED_OPTIONS
 from life_simulator.persistence.save_load import DEFAULT_SAVE_PATH, load_game, save_game
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
 from life_simulator.simulation.entity import Diet, Entity
@@ -337,7 +337,7 @@ class SimScreen(Screen):
 
         panel_w = 290
         col_w = panel_w // 2
-        panel_h = 30 + 30 + 22 + len(genes) * 20 + 30
+        panel_h = 30 + 24 + 30 + 22 + len(genes) * 20 + 30
         x = self._width - panel_w - 10
         y = 10
 
@@ -347,8 +347,19 @@ class SimScreen(Screen):
 
         cy = y + 8
         self._blit_text(surface, entity.diet.name, x + 12, cy, accent)
-        self._blit_text(surface, f"age {entity.age}/{MAX_AGE}", x + col_w + 12, cy, _HUD_TEXT)
-        cy += 28
+        self._blit_text(
+            surface, f"age {entity.age}/{entity.lifespan}", x + col_w + 12, cy, _HUD_TEXT
+        )
+        cy += 20
+        self._blit_text(surface, entity.stage.name.lower(), x + 12, cy, _HUD_HEADING)
+        self._blit_text(
+            surface,
+            f"young {entity.offspring}/{MAX_OFFSPRING}",
+            x + col_w + 12,
+            cy,
+            _HUD_HEADING,
+        )
+        cy += 24
 
         # Energy bar.
         frac = max(0.0, min(1.0, entity.energy / body.max_energy))

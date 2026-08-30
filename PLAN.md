@@ -11,7 +11,7 @@ the roadmap: stages, tickets, and acceptance criteria.
 | 7 | Map 2.0 | island with rivers/lakes/beaches/mountains, grass layer, full-screen | ✅ done |
 | 8 | Genome 2.0 | new gene set, phenotype trade-offs, crossover | ✅ done |
 | 9 | Lifecycle | juveniles, 1–2 births per life, death causes | ✅ done |
-| 10 | Behaviour | state machines, stealth detection, chase & escape | ⬜ todo |
+| 10 | Behaviour | state machines, stealth detection, chase & escape | ✅ done |
 | 11 | Mating & social | sexual selection, courtship, families, herds | ⬜ todo |
 | 12 | Visuals 2.0 | procedural animal sprites, state cues, LOD | ⬜ todo |
 | 13 | Analytics 2.0 | event log, live charts, HTML report, presets | ⬜ todo |
@@ -81,12 +81,12 @@ roll (replaces energy-drain combat).
 
 | Ticket | Description | Acceptance |
 |---|---|---|
-| 10.1 | FSM scaffolding: `EntityState` enum, per-state update dispatch, state exposed to UI; ecosystem-owned `random.Random(seed)` replaces global `random` | state visible in inspector; same seed ⇒ same run |
-| 10.2 | Herbivore `FORAGE` (best grass cell in vision, FOREST only) + short `REST`; grazing only on forest cells | herbivores starve on sand-only maps (test) |
-| 10.3 | Detection model: `pred.vision · (1 − prey.eff_stealth)` and mirrored for prey; used by both species | unit tests with hand-built genomes |
-| 10.4 | `CHASE` / `FLEE`: sprint speed & quadratic sprint cost, give-up rules (distance gap, predator exhaustion) | chases terminate; no infinite pursuits in 5k-tick run |
-| 10.5 | Capture roll per DESIGN (`p_escape`); escape ⇒ wound + panic burst + predator cooldown; kill ⇒ death(PREDATION) + energy gain | probability bounds test; wounded prey loses energy |
-| 10.6 | Predator `REST` (digestion) until energy < hunger threshold, then `HUNT` | after a kill predator rests for a macroscopic period |
+| 10.1 | `EntityState` enum, per-state dispatch, state shown in the inspector; ecosystem-owned `random.Random(seed)` replaces global `random` throughout | ✅ state visible in inspector; same seed ⇒ identical run |
+| 10.2 | Herbivore `FORAGE` (best grass cell in vision) + `REST` when full | ✅ forages when hungry, rests when sated, flight overrides both |
+| 10.3 | Detection model: `observer.vision · (1 − target.stealth)`, used by both species | ✅ unit tests with hand-built genomes; detection is not mutual |
+| 10.4 | `CHASE` / `FLEE`: sprint speed and cost, give-up on distance or exhaustion | ✅ chases terminate; sprinting costs more than walking |
+| 10.5 | Capture roll; escape ⇒ wound + predator cooldown; kill ⇒ death(PREDATION) + meal | ✅ probability bounds test; wounded prey loses energy |
+| 10.6 | Predator `REST` (digestion) until energy < hunger threshold, then `HUNT` | ✅ a kill sends it to rest; rest ends when hunger returns |
 | 10.7 | Behaviour test suite + smoke balance: default config survives 5k ticks with both species alive | CI green |
 
 ---

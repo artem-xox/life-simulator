@@ -239,7 +239,8 @@ and the inspector.
 
 | State | Behaviour |
 |---|---|
-| `HUNT` | roam / stalk until prey detected, then chase |
+| `HUNT` | roam until prey is detected |
+| `CHASE` | run the prey down; commits to one animal rather than switching to whichever strays nearest |
 | `REST` | long digestion after a kill — until energy drops below a hunger threshold (~50% of max); rest duration therefore emerges from metabolism |
 | `SEEK_MATE` / `COURT` | see Mating |
 | `FOLLOW_FAMILY` | juveniles shadow their parents |

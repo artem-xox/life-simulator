@@ -1,13 +1,18 @@
 """Entity: a single creature living on the world grid.
 
-Behaviour is a simple priority loop each tick:
-  1. Age and pay the metabolic energy cost.
-  2. Die if starved or too old.
-  3. Act according to diet (seek grass / seek prey).
-  4. Reproduce if energy is high enough.
+Each tick an animal ages, pays for its body, decides what state it is in, and
+acts on it. The state machine is small on purpose — forage, rest, flee, hunt,
+chase — but it is where most of what happens in a run comes from: a herd that
+spends its day fleeing does not eat, and a predator that has just fed leaves
+the prey alone for a long while.
 
-Adding new behaviours: subclass Entity or extend the _step_* methods.
-Adding new genes: add them to Genome — Entity reads them via self.genome.
+Two animals do not see each other equally. Detection range is the observer's
+vision reduced by the other's concealment, so a stealthy animal is noticed late
+by a sharp-eyed one and a conspicuous predator announces itself. That single
+rule is what gives the stealth gene its teeth.
+
+Adding new genes: add them to Genome — the phenotype turns them into abilities,
+and Entity reads those rather than the genes directly.
 """
 
 from __future__ import annotations
@@ -20,22 +25,35 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from life_simulator.config.settings import (
-    ATTACK_DAMAGE,
-    ATTACK_EFFICIENCY,
-    ATTACK_RANGE,
+    BASE_ESCAPE_CHANCE,
     BREEDING_COOLDOWN_FRACTION,
+    CAPTURE_RANGE,
+    CHASE_EXHAUSTION_FRACTION,
+    CHASE_GIVE_UP_MARGIN,
     CHILD_ENERGY_FRACTION,
+    ESCAPE_JUVENILE_PENALTY,
+    ESCAPE_POWER_WEIGHT,
+    ESCAPE_SPEED_WEIGHT,
     FERTILITY_END_FRACTION,
     FERTILITY_START_FRACTION,
+    FLEE_MEMORY,
     GRAZE_AMOUNT,
     GRAZE_ENERGY_GAIN,
+    GRAZER_REST_THRESHOLD,
+    HUNGER_THRESHOLD,
     JUVENILE_FRACTION,
     JUVENILE_PREY_VALUE,
+    KILL_ENERGY_PER_SIZE,
     LIFESPAN_BASE,
     LIFESPAN_VARIATION,
+    MAX_ESCAPE_CHANCE,
     MAX_OFFSPRING,
+    MIN_ESCAPE_CHANCE,
+    RECAPTURE_COOLDOWN,
     REPRODUCTION_THRESHOLD,
+    SPRINT_SPEED_MULTIPLIER,
     WANDER_INTERVAL,
+    WOUND_ENERGY_LOSS,
 )
 from life_simulator.simulation.genome import Genome
 from life_simulator.simulation.phenotype import Phenotype
@@ -43,10 +61,6 @@ from life_simulator.simulation.phenotype import Phenotype
 if TYPE_CHECKING:
     from life_simulator.simulation.spatial import SpatialGrid
     from life_simulator.simulation.world import World
-
-# ---------------------------------------------------------------------------
-# Diet enum
-# ---------------------------------------------------------------------------
 
 
 class Diet(IntEnum):
@@ -69,6 +83,16 @@ class LifeStage(IntEnum):
     ADULT = 1
 
 
+class EntityState(IntEnum):
+    """What an animal is doing right now."""
+
+    FORAGE = 0
+    REST = 1
+    FLEE = 2
+    HUNT = 3
+    CHASE = 4
+
+
 #: Headings an entity tries, in order, when its direct path is blocked by water
 #: or rock. Turning aside rather than stopping lets it slide along an obstacle
 #: and work its way around. Each entity mirrors this list (see ``_turn_bias``)
@@ -84,11 +108,6 @@ _AVOID_DEFLECTIONS: tuple[float, ...] = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Entity
-# ---------------------------------------------------------------------------
-
-
 class Entity:
     """A single creature on the world grid.
 
@@ -99,6 +118,7 @@ class Entity:
         alive: False after the entity has died.
         death_cause: why it died, or None while it lives.
         diet: HERBIVORE or CARNIVORE — determines feeding behaviour.
+        state: what it is doing this tick.
         genome: heritable traits; passed (with mutation) to offspring.
         body: the abilities those genes yield — speed, upkeep, reserves and
             concealment, all derived with the trade-offs of carrying a body.
@@ -114,13 +134,20 @@ class Entity:
         "age",
         "alive",
         "diet",
+        "state",
         "genome",
         "body",
         "lifespan",
         "offspring",
         "death_cause",
+        "_rng",
         "_breeding_rest_until",
         "_fully_grown",
+        "_flee_until",
+        "_threat_x",
+        "_threat_y",
+        "_quarry",
+        "_capture_rest_until",
         "_target_x",
         "_target_y",
         "_wander_timer",
@@ -135,7 +162,13 @@ class Entity:
         genome: Genome,
         energy: float | None = None,
         age: int = 0,
+        rng: random.Random | None = None,
     ) -> None:
+        # Randomness is per-animal rather than global: the ecosystem hands every
+        # creature the same seeded generator, which is what lets a whole run be
+        # reproduced from its seed.
+        self._rng = rng if rng is not None else random.Random()
+
         self.x = x
         self.y = y
         self.diet = diet
@@ -144,21 +177,30 @@ class Entity:
         # No two animals get exactly the same span, so a cohort born together
         # does not also die together and leave the world briefly empty.
         self.lifespan: int = round(
-            LIFESPAN_BASE * (1.0 + random.uniform(-LIFESPAN_VARIATION, LIFESPAN_VARIATION))
+            LIFESPAN_BASE * (1.0 + self._rng.uniform(-LIFESPAN_VARIATION, LIFESPAN_VARIATION))
         )
         self.body = Phenotype.of(genome, self.maturity)
         self.alive: bool = True
         self.death_cause: DeathCause | None = None
+        self.state: EntityState = EntityState.HUNT if diet is Diet.CARNIVORE else EntityState.FORAGE
         self.offspring: int = 0
         self._breeding_rest_until: int = 0
         self._fully_grown: bool = self.maturity >= 1.0
         self.energy: float = energy if energy is not None else self.body.max_energy * 0.4
+
+        # What it is running from, and what it is running after.
+        self._flee_until: int = 0
+        self._threat_x: float = x
+        self._threat_y: float = y
+        self._quarry: Entity | None = None
+        self._capture_rest_until: int = 0
+
         # Navigation state.
         self._target_x: float = x
         self._target_y: float = y
         self._wander_timer: int = 0
         # Which way this individual prefers to turn around an obstacle.
-        self._turn_bias: float = 1.0 if random.random() < 0.5 else -1.0
+        self._turn_bias: float = 1.0 if self._rng.random() < 0.5 else -1.0
 
     # --- Life stage -------------------------------------------------------- #
 
@@ -184,6 +226,22 @@ class Entity:
         self.alive = False
         self.death_cause = cause
 
+    # --- Perception -------------------------------------------------------- #
+
+    def distance_to(self, other: Entity) -> float:
+        return math.hypot(self.x - other.x, self.y - other.y)
+
+    def detection_range(self, other: Entity) -> float:
+        """How close ``other`` must be before this animal notices it.
+
+        The sight is the observer's, the concealment is the target's — so two
+        animals will often not see each other at the same moment.
+        """
+        return self.genome.vision * (1.0 - other.body.stealth)
+
+    def can_see(self, other: Entity) -> bool:
+        return self.distance_to(other) <= self.detection_range(other)
+
     # --- Main update ------------------------------------------------------- #
 
     def step(self, world: World, spatial: SpatialGrid) -> Entity | None:
@@ -203,30 +261,76 @@ class Entity:
             self._fully_grown = self.maturity >= 1.0
 
         self.energy -= self.body.tick_cost
-
-        if self.energy <= 0.0:
-            self.die(DeathCause.STARVATION)
-            return None
-        if self.age >= self.lifespan:
-            self.die(DeathCause.OLD_AGE)
+        if self._check_death():
             return None
 
-        if self.diet == Diet.HERBIVORE:
-            self._step_herbivore(world)
+        if self.diet is Diet.HERBIVORE:
+            self._act_as_grazer(world, spatial)
         else:
-            self._step_carnivore(world, spatial)
+            self._act_as_hunter(world, spatial)
+
+        # Running is expensive enough to kill, so death is checked again after
+        # acting rather than only at the top of the tick.
+        if self._check_death():
+            return None
 
         return self._try_reproduce(world)
 
-    # --- Herbivore behaviour ----------------------------------------------- #
+    def _check_death(self) -> bool:
+        if self.energy <= 0.0:
+            self.die(DeathCause.STARVATION)
+            return True
+        if self.age >= self.lifespan:
+            self.die(DeathCause.OLD_AGE)
+            return True
+        return False
 
-    def _step_herbivore(self, world: World) -> None:
+    # --- Herbivore --------------------------------------------------------- #
+
+    def _act_as_grazer(self, world: World, spatial: SpatialGrid) -> None:
+        threat = self._nearest_threat(spatial)
+        if threat is not None:
+            self._threat_x, self._threat_y = threat.x, threat.y
+            self._flee_until = self.age + FLEE_MEMORY
+
+        if self.age < self._flee_until:
+            self.state = EntityState.FLEE
+            self._flee(world)
+        elif self.energy >= GRAZER_REST_THRESHOLD * self.body.max_energy:
+            # Full, and nothing is after it. Standing still costs least.
+            self.state = EntityState.REST
+        else:
+            self.state = EntityState.FORAGE
+            self._forage(world)
+
+    def _nearest_threat(self, spatial: SpatialGrid) -> Entity | None:
+        """Return the closest predator this animal can actually see."""
+        best: Entity | None = None
+        best_distance = float("inf")
+        for other in spatial.nearby(self.x, self.y, self.genome.vision):
+            if other.diet is not Diet.CARNIVORE or not other.alive:
+                continue
+            distance = self.distance_to(other)
+            if distance < best_distance and self.can_see(other):
+                best_distance = distance
+                best = other
+        return best
+
+    def _flee(self, world: World) -> None:
+        """Run directly away from where the danger was last seen."""
+        self._sprint_toward(
+            self.x + (self.x - self._threat_x),
+            self.y + (self.y - self._threat_y),
+            world,
+        )
+
+    def _forage(self, world: World) -> None:
         target = self._find_grass_target(world)
         if target is None:
             target = self._wander(world)
         self._move_toward(target[0], target[1], world)
 
-        # Graze at current cell (entity has moved; gains energy where it now stands).
+        # Graze at current cell (entity has moved; gains energy where it stands).
         cx, cy = int(self.x), int(self.y)
         if world.in_bounds(cx, cy):
             eaten = world.graze_at(cx, cy, GRAZE_AMOUNT)
@@ -246,44 +350,99 @@ class Entity:
         fy, fx = divmod(idx, patch.shape[1])
         return float(x0 + fx), float(y0 + fy)
 
-    # --- Carnivore behaviour ----------------------------------------------- #
+    # --- Carnivore --------------------------------------------------------- #
 
-    def _step_carnivore(self, world: World, spatial: SpatialGrid) -> None:
-        prey = self._find_prey(spatial)
-        if prey is not None:
-            self._move_toward(prey.x, prey.y, world)
-            if math.hypot(self.x - prey.x, self.y - prey.y) < ATTACK_RANGE:
-                self._attack(prey)
-        else:
+    def _act_as_hunter(self, world: World, spatial: SpatialGrid) -> None:
+        if self.energy >= HUNGER_THRESHOLD * self.body.max_energy:
+            # Digesting. A big meal buys a long rest, and that rest is what
+            # lets a prey population breathe between hunts.
+            self.state = EntityState.REST
+            self._quarry = None
+            return
+
+        quarry = self._pick_quarry(spatial)
+        if quarry is None:
+            self.state = EntityState.HUNT
+            self._quarry = None
             tx, ty = self._wander(world)
             self._move_toward(tx, ty, world)
+            return
 
-    def _find_prey(self, spatial: SpatialGrid) -> Entity | None:
+        self.state = EntityState.CHASE
+        self._quarry = quarry
+        self._sprint_toward(quarry.x, quarry.y, world)
+        if self.distance_to(quarry) <= CAPTURE_RANGE and self.age >= self._capture_rest_until:
+            self._attempt_capture(quarry)
+
+    def _pick_quarry(self, spatial: SpatialGrid) -> Entity | None:
+        """Choose prey to run down: whichever visible animal is closest.
+
+        A chase already under way is kept while the prey stays within reach, so
+        a predator commits to one animal instead of switching every time another
+        strays a little nearer.
+        """
+        current = self._quarry
+        if current is not None and current.alive and not self._has_given_up(current):
+            return current
+
         best: Entity | None = None
-        best_dist = float("inf")
+        best_distance = float("inf")
         for other in spatial.nearby(self.x, self.y, self.genome.vision):
-            if other is self or not other.alive or other.diet != Diet.HERBIVORE:
+            if other.diet is not Diet.HERBIVORE or not other.alive:
                 continue
-            d = math.hypot(self.x - other.x, self.y - other.y)
-            if d < self.genome.vision and d < best_dist:
-                best_dist = d
+            distance = self.distance_to(other)
+            if distance < best_distance and self.can_see(other):
+                best_distance = distance
                 best = other
         return best
 
-    def _attack(self, prey: Entity) -> None:
-        # Relative size affects how much damage is dealt vs. absorbed.
-        size_ratio = self.body.body_size / max(prey.body.body_size, 0.1)
-        damage = ATTACK_DAMAGE * min(size_ratio, 2.0)
-        stolen = min(prey.energy, damage)
-        prey.energy -= stolen
-        gained = stolen * ATTACK_EFFICIENCY * prey.prey_value
-        if prey.energy <= 0.0:
-            prey.die(DeathCause.PREDATION)
-        self.energy = min(self.body.max_energy, self.energy + gained)
+    def _has_given_up(self, quarry: Entity) -> bool:
+        """Whether to break off a chase — the prey is clear, or the legs are gone."""
+        if self.energy < CHASE_EXHAUSTION_FRACTION * self.body.max_energy:
+            return True
+        return self.distance_to(quarry) > self.detection_range(quarry) + CHASE_GIVE_UP_MARGIN
 
-    # --- Shared movement --------------------------------------------------- #
+    def escape_chance(self, prey: Entity) -> float:
+        """Probability that ``prey`` tears free of this predator.
 
-    def _move_toward(self, tx: float, ty: float, world: World) -> None:
+        Pace decides most of it and leverage the rest: prey that is fast for its
+        build slips away, and a heavy one can wrench itself loose. A juvenile has
+        neither. The bounds keep every hunt uncertain — there is no sure kill and
+        no sure escape.
+        """
+        chance = (
+            BASE_ESCAPE_CHANCE
+            + ESCAPE_SPEED_WEIGHT * (prey.body.speed - self.body.speed)
+            + ESCAPE_POWER_WEIGHT * (prey.body.escape_power / self.body.body_size - 0.5)
+        )
+        if prey.stage is LifeStage.JUVENILE:
+            chance -= ESCAPE_JUVENILE_PENALTY
+        return min(MAX_ESCAPE_CHANCE, max(MIN_ESCAPE_CHANCE, chance))
+
+    def _attempt_capture(self, prey: Entity) -> None:
+        """Try to bring down prey that has been run to ground."""
+        if self._rng.random() < self.escape_chance(prey):
+            # It tore free: hurt, but away. The predator has to regather before
+            # it can seize anything again.
+            prey.energy *= 1.0 - WOUND_ENERGY_LOSS
+            self._capture_rest_until = self.age + RECAPTURE_COOLDOWN
+            self._quarry = None
+            return
+
+        prey.die(DeathCause.PREDATION)
+        meal = KILL_ENERGY_PER_SIZE * prey.body.body_size * prey.prey_value
+        self.energy = min(self.body.max_energy, self.energy + meal)
+        self._quarry = None
+        self.state = EntityState.REST
+
+    # --- Movement ---------------------------------------------------------- #
+
+    def _sprint_toward(self, tx: float, ty: float, world: World) -> None:
+        """Run flat out, paying for it. Sprinting is quadratic in pace."""
+        self.energy -= self.body.sprint_cost
+        self._move_toward(tx, ty, world, speed_scale=SPRINT_SPEED_MULTIPLIER)
+
+    def _move_toward(self, tx: float, ty: float, world: World, speed_scale: float = 1.0) -> None:
         """Step towards a target, turning aside if water or rock is in the way."""
         dx = tx - self.x
         dy = ty - self.y
@@ -294,14 +453,14 @@ class Entity:
         cx = max(0, min(world.width - 1, int(self.x)))
         cy = max(0, min(world.height - 1, int(self.y)))
         cost = world.move_cost(cx, cy)
-        step = min(self.body.speed / cost, dist)
+        step = min(self.body.speed * speed_scale / cost, dist)
         heading = math.atan2(dy, dx)
 
         for deflection in _AVOID_DEFLECTIONS:
             angle = heading + deflection * self._turn_bias
             nx = self.x + math.cos(angle) * step
             ny = self.y + math.sin(angle) * step
-            # Keep position strictly inside world bounds so int(pos) is always valid.
+            # Keep position strictly inside world bounds so int(pos) is valid.
             nx = max(0.0, min(world.width - 1e-6, nx))
             ny = max(0.0, min(world.height - 1e-6, ny))
             if world.is_walkable(int(nx), int(ny)):
@@ -316,8 +475,8 @@ class Entity:
             self._wander_timer = WANDER_INTERVAL
             r = self.genome.vision
             for _ in range(12):
-                tx = self.x + random.uniform(-r, r)
-                ty = self.y + random.uniform(-r, r)
+                tx = self.x + self._rng.uniform(-r, r)
+                ty = self.y + self._rng.uniform(-r, r)
                 tx = max(0.0, min(world.width - 1.0, tx))
                 ty = max(0.0, min(world.height - 1.0, ty))
                 if world.is_walkable(int(tx), int(ty)):
@@ -350,7 +509,7 @@ class Entity:
             return None
 
         cx, cy = self._birth_spot(world)
-        child = Entity(cx, cy, self.diet, self.genome.mutate())
+        child = Entity(cx, cy, self.diet, self.genome.mutate(self._rng), rng=self._rng)
 
         # A newborn body is a fraction of its parent's and cannot hold a
         # parent-sized share of energy. Transferring the full share regardless
@@ -371,8 +530,8 @@ class Entity:
         is stranded: nothing can walk out of a cell it could never walk into.
         """
         for _ in range(6):
-            cx = self.x + random.uniform(-1.0, 1.0)
-            cy = self.y + random.uniform(-1.0, 1.0)
+            cx = self.x + self._rng.uniform(-1.0, 1.0)
+            cy = self.y + self._rng.uniform(-1.0, 1.0)
             cx = max(0.0, min(world.width - 1e-6, cx))
             cy = max(0.0, min(world.height - 1e-6, cy))
             if world.is_walkable(int(cx), int(cy)):

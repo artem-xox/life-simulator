@@ -50,6 +50,7 @@ class Ecosystem:
 
     Attributes:
         world: the surface and grass grid.
+        rng: the simulation's only source of randomness.
         entities: all currently living entities.
         tick_count: total simulation ticks elapsed.
         births: running count of young actually admitted to the world.
@@ -68,8 +69,12 @@ class Ecosystem:
     # useful time window even at high simulation speeds).
     _SAMPLE_INTERVAL: int = 5
 
-    def __init__(self, world: World) -> None:
+    def __init__(self, world: World, seed: int = 0) -> None:
         self.world = world
+        # One generator for the whole simulation. Nothing in here touches the
+        # global `random`, so two ecosystems built from the same seed run the
+        # same way no matter what else the process is doing.
+        self.rng = random.Random(seed)
         self.entities: list[Entity] = []
         self.spatial = SpatialGrid()
         self.tick_count: int = 0
@@ -107,7 +112,7 @@ class Ecosystem:
             except Exception as exc:
                 log.debug("event pump skipped: %s", exc)
 
-        eco = cls(world)
+        eco = cls(world, seed=world_cfg.seed)
 
         log.info("step 2/3 — spawning initial entities...")
         eco._spawn_initial(species)
@@ -131,9 +136,11 @@ class Ecosystem:
         return eco
 
     @classmethod
-    def from_saved(cls, world: World, entities: list[Entity], tick_count: int) -> Ecosystem:
+    def from_saved(
+        cls, world: World, entities: list[Entity], tick_count: int, seed: int = 0
+    ) -> Ecosystem:
         """Rebuild an Ecosystem from a loaded save (pre-built world + entities)."""
-        eco = cls(world)
+        eco = cls(world, seed=seed)
         eco.entities = entities
         eco.tick_count = tick_count
         eco.stats.record(tick_count, entities)
@@ -175,7 +182,7 @@ class Ecosystem:
         slots = max(0, self.ENTITY_CAP - len(self.entities))
         if slots and newborns:
             if len(newborns) > slots:
-                random.shuffle(newborns)
+                self.rng.shuffle(newborns)
                 newborns = newborns[:slots]
             # Counted on admission, not on conception: young turned away at the
             # cap never enter the world, so they never leave it either.
@@ -216,15 +223,16 @@ class Ecosystem:
         oldest_at_start = round(FERTILITY_END_FRACTION * LIFESPAN_BASE)
 
         for spec in species:
-            positions = random.choices(walkable, k=spec.count)
+            positions = self.rng.choices(walkable, k=spec.count)
             for px, py in positions:
                 self.entities.append(
                     Entity(
-                        x=float(px) + random.random(),
-                        y=float(py) + random.random(),
+                        x=float(px) + self.rng.random(),
+                        y=float(py) + self.rng.random(),
                         diet=spec.diet,
                         genome=spec.genome.copy(),
-                        age=random.randrange(oldest_at_start),
+                        age=self.rng.randrange(oldest_at_start),
+                        rng=self.rng,
                     )
                 )
             log.debug(

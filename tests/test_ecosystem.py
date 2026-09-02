@@ -65,36 +65,6 @@ def test_old_entity_dies() -> None:
     assert not herb.alive
 
 
-def test_reproduction_spawns_child() -> None:
-    world = _small_world()
-    world.grass[:] = world.grass_max
-    # Give the entity energy just above its reproduction threshold.
-    herb = _herb(world)
-    herb.age = round(0.5 * herb.lifespan)  # grown, and inside its fertile window
-    spatial = SpatialGrid()
-    spatial.rebuild([herb])
-    herb.step(world, spatial)  # lets its grown body settle before energy is set
-    herb.energy = herb.body.max_energy  # definitely above threshold
-    child = herb.step(world, spatial)
-    assert child is not None
-    assert child.diet == Diet.HERBIVORE
-    assert child.energy > 0.0
-
-
-def test_reproduction_reduces_parent_energy() -> None:
-    world = _small_world()
-    world.grass[:] = 0.0
-    herb = _herb(world)
-    herb.age = round(0.5 * herb.lifespan)
-    spatial = SpatialGrid()
-    spatial.rebuild([herb])
-    herb.step(world, spatial)  # lets its grown body settle before energy is set
-    herb.energy = herb.body.max_energy
-    before = herb.energy
-    herb.step(world, spatial)
-    assert herb.energy < before
-
-
 # ---------------------------------------------------------------------------
 # Ecosystem-level tests
 # ---------------------------------------------------------------------------

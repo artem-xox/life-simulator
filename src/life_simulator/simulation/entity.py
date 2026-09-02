@@ -2,14 +2,20 @@
 
 Each tick an animal ages, pays for its body, decides what state it is in, and
 acts on it. The state machine is small on purpose — forage, rest, flee, hunt,
-chase — but it is where most of what happens in a run comes from: a herd that
-spends its day fleeing does not eat, and a predator that has just fed leaves
-the prey alone for a long while.
+chase, seek a mate, court — but it is where most of what happens in a run
+comes from: a herd that spends its day fleeing does not eat, and a predator
+that has just fed leaves the prey alone for a long while.
 
 Two animals do not see each other equally. Detection range is the observer's
 vision reduced by the other's concealment, so a stealthy animal is noticed late
 by a sharp-eyed one and a conspicuous predator announces itself. That single
-rule is what gives the stealth gene its teeth.
+rule is what gives the stealth gene its teeth, and it doubles as how a ready
+adult judges whether it can even see a prospective mate.
+
+Groups are not objects this module tracks — they emerge from steering nudges
+applied to whatever an animal was already walking towards: juveniles pull hard
+toward their parents, parents pull gently toward their young, and every animal
+drifts toward its own kind by however much its `sociality` gene calls for.
 
 Adding new genes: add them to Genome — the phenotype turns them into abilities,
 and Entity reads those rather than the genes directly.
@@ -25,27 +31,39 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from life_simulator.config.settings import (
+    ALERT_RADIUS,
     BASE_ESCAPE_CHANCE,
     BREEDING_COOLDOWN_FRACTION,
     CAPTURE_RANGE,
     CHASE_EXHAUSTION_FRACTION,
     CHASE_GIVE_UP_MARGIN,
     CHILD_ENERGY_FRACTION,
+    COURTSHIP_DURATION,
+    COURTSHIP_RANGE,
     ESCAPE_JUVENILE_PENALTY,
     ESCAPE_POWER_WEIGHT,
     ESCAPE_SPEED_WEIGHT,
+    FAMILY_JUVENILE_PULL,
+    FAMILY_PARENT_PULL,
     FERTILITY_END_FRACTION,
     FERTILITY_START_FRACTION,
     FLEE_MEMORY,
+    FORAGE_SOCIAL_BLEND,
     GRAZE_AMOUNT,
     GRAZE_ENERGY_GAIN,
     GRAZER_REST_THRESHOLD,
+    HERD_COHESION_WEIGHT,
+    HERD_RADIUS,
+    HERD_SEPARATION_RADIUS,
+    HERD_SEPARATION_WEIGHT,
     HUNGER_THRESHOLD,
     JUVENILE_FRACTION,
     JUVENILE_PREY_VALUE,
     KILL_ENERGY_PER_SIZE,
     LIFESPAN_BASE,
     LIFESPAN_VARIATION,
+    MATE_SCORE_ENERGY_WEIGHT,
+    MATE_SCORE_SIZE_WEIGHT,
     MAX_ESCAPE_CHANCE,
     MAX_OFFSPRING,
     MIN_ESCAPE_CHANCE,
@@ -91,6 +109,8 @@ class EntityState(IntEnum):
     FLEE = 2
     HUNT = 3
     CHASE = 4
+    SEEK_MATE = 5
+    COURT = 6
 
 
 #: Headings an entity tries, in order, when its direct path is blocked by water
@@ -119,7 +139,8 @@ class Entity:
         death_cause: why it died, or None while it lives.
         diet: HERBIVORE or CARNIVORE — determines feeding behaviour.
         state: what it is doing this tick.
-        genome: heritable traits; passed (with mutation) to offspring.
+        genome: heritable traits; passed (with mutation, via a mate's own
+            genes) to offspring.
         body: the abilities those genes yield — speed, upkeep, reserves and
             concealment, all derived with the trade-offs of carrying a body.
             It is rebuilt as a juvenile grows, then settles.
@@ -141,6 +162,7 @@ class Entity:
         "offspring",
         "death_cause",
         "_rng",
+        "_tie_id",
         "_breeding_rest_until",
         "_fully_grown",
         "_flee_until",
@@ -148,6 +170,10 @@ class Entity:
         "_threat_y",
         "_quarry",
         "_capture_rest_until",
+        "_mate",
+        "_court_ticks",
+        "_parents",
+        "_children",
         "_target_x",
         "_target_y",
         "_wander_timer",
@@ -163,11 +189,16 @@ class Entity:
         energy: float | None = None,
         age: int = 0,
         rng: random.Random | None = None,
+        parents: tuple[Entity, Entity] | None = None,
     ) -> None:
         # Randomness is per-animal rather than global: the ecosystem hands every
         # creature the same seeded generator, which is what lets a whole run be
         # reproduced from its seed.
         self._rng = rng if rng is not None else random.Random()
+        # An essentially-unique, seed-derived tag used only to break ties
+        # deterministically (see ``_pursue_mate``) — never for anything that
+        # should depend on memory layout, which would break reproducibility.
+        self._tie_id: int = self._rng.getrandbits(64)
 
         self.x = x
         self.y = y
@@ -194,6 +225,15 @@ class Entity:
         self._threat_y: float = y
         self._quarry: Entity | None = None
         self._capture_rest_until: int = 0
+
+        # Courtship: who it is paired with, and how long they have been
+        # together within range.
+        self._mate: Entity | None = None
+        self._court_ticks: int = 0
+
+        # Family: the two animals that made it, and the young it has made.
+        self._parents: tuple[Entity, Entity] | None = parents
+        self._children: list[Entity] = []
 
         # Navigation state.
         self._target_x: float = x
@@ -265,16 +305,16 @@ class Entity:
             return None
 
         if self.diet is Diet.HERBIVORE:
-            self._act_as_grazer(world, spatial)
+            child = self._act_as_grazer(world, spatial)
         else:
-            self._act_as_hunter(world, spatial)
+            child = self._act_as_hunter(world, spatial)
 
         # Running is expensive enough to kill, so death is checked again after
         # acting rather than only at the top of the tick.
         if self._check_death():
             return None
 
-        return self._try_reproduce(world)
+        return child
 
     def _check_death(self) -> bool:
         if self.energy <= 0.0:
@@ -287,21 +327,29 @@ class Entity:
 
     # --- Herbivore --------------------------------------------------------- #
 
-    def _act_as_grazer(self, world: World, spatial: SpatialGrid) -> None:
+    def _act_as_grazer(self, world: World, spatial: SpatialGrid) -> Entity | None:
         threat = self._nearest_threat(spatial)
         if threat is not None:
             self._threat_x, self._threat_y = threat.x, threat.y
             self._flee_until = self.age + FLEE_MEMORY
+            self._alert_neighbours(spatial, threat)
 
         if self.age < self._flee_until:
             self.state = EntityState.FLEE
             self._flee(world)
-        elif self.energy >= GRAZER_REST_THRESHOLD * self.body.max_energy:
-            # Full, and nothing is after it. Standing still costs least.
+            return None
+
+        handled, child = self._pursue_mate(world, spatial)
+        if handled:
+            return child
+
+        if self.energy >= GRAZER_REST_THRESHOLD * self.body.max_energy:
             self.state = EntityState.REST
+            self._rest_drift(world, spatial)
         else:
             self.state = EntityState.FORAGE
-            self._forage(world)
+            self._forage(world, spatial)
+        return None
 
     def _nearest_threat(self, spatial: SpatialGrid) -> Entity | None:
         """Return the closest predator this animal can actually see."""
@@ -316,6 +364,21 @@ class Entity:
                 best = other
         return best
 
+    def _alert_neighbours(self, spatial: SpatialGrid, threat: Entity) -> None:
+        """A predator I can see is a predator my herd should know about too.
+
+        Neighbours are alerted to the predator's real position, not mine, so
+        they flee the actual danger even though they never spotted it
+        themselves — a herd sees with more eyes than any one member has.
+        """
+        for other in spatial.nearby(self.x, self.y, ALERT_RADIUS):
+            if other is self or other.diet is not self.diet or not other.alive:
+                continue
+            if self.distance_to(other) > ALERT_RADIUS:
+                continue
+            other._threat_x, other._threat_y = threat.x, threat.y
+            other._flee_until = max(other._flee_until, self.age + FLEE_MEMORY)
+
     def _flee(self, world: World) -> None:
         """Run directly away from where the danger was last seen."""
         self._sprint_toward(
@@ -324,10 +387,22 @@ class Entity:
             world,
         )
 
-    def _forage(self, world: World) -> None:
-        target = self._find_grass_target(world)
-        if target is None:
-            target = self._wander(world)
+    def _forage(self, world: World, spatial: SpatialGrid) -> None:
+        grass_target = self._find_grass_target(world)
+        social_target = self._social_target(spatial)
+
+        if grass_target is not None and social_target is not None:
+            # Food comes first, but the pull of family and herd still bends
+            # the route — a blend rather than a fallback, or the pull would
+            # almost never be felt in a world with grass more or less anywhere.
+            gx, gy = grass_target
+            sx, sy = social_target
+            target = (
+                gx + (sx - gx) * FORAGE_SOCIAL_BLEND,
+                gy + (sy - gy) * FORAGE_SOCIAL_BLEND,
+            )
+        else:
+            target = grass_target or social_target or self._wander(world)
         self._move_toward(target[0], target[1], world)
 
         # Graze at current cell (entity has moved; gains energy where it stands).
@@ -350,29 +425,53 @@ class Entity:
         fy, fx = divmod(idx, patch.shape[1])
         return float(x0 + fx), float(y0 + fy)
 
+    def _rest_drift(self, world: World, spatial: SpatialGrid) -> None:
+        """A resting animal has nothing pressing to do — except find its own kind."""
+        target = self._social_target(spatial)
+        if target is not None:
+            self._move_toward(target[0], target[1], world)
+
     # --- Carnivore --------------------------------------------------------- #
 
-    def _act_as_hunter(self, world: World, spatial: SpatialGrid) -> None:
+    def _act_as_hunter(self, world: World, spatial: SpatialGrid) -> Entity | None:
         if self.energy >= HUNGER_THRESHOLD * self.body.max_energy:
             # Digesting. A big meal buys a long rest, and that rest is what
             # lets a prey population breathe between hunts.
             self.state = EntityState.REST
             self._quarry = None
-            return
+            handled, child = self._pursue_mate(world, spatial)
+            if handled:
+                return child
+            self._rest_drift(world, spatial)
+            return None
 
         quarry = self._pick_quarry(spatial)
         if quarry is None:
             self.state = EntityState.HUNT
             self._quarry = None
-            tx, ty = self._wander(world)
+            tx, ty = self._social_target(spatial) or self._wander(world)
             self._move_toward(tx, ty, world)
-            return
+            return None
 
-        self.state = EntityState.CHASE
         self._quarry = quarry
-        self._sprint_toward(quarry.x, quarry.y, world)
+        already_close = self.distance_to(quarry) <= CAPTURE_RANGE
+        if already_close or self.energy >= CHASE_EXHAUSTION_FRACTION * self.body.max_energy:
+            self.state = EntityState.CHASE
+            self._sprint_toward(quarry.x, quarry.y, world)
+        else:
+            # Too gassed to sprint after it. Nothing but a kill lets a
+            # predator's energy recover, so sprinting anyway would spend the
+            # last of it closing on a target it cannot then afford to catch —
+            # and in a population thick with visible prey, giving up on one
+            # exhausted chase would otherwise just hand it a fresh one to
+            # sprint into next tick. Walking instead is what makes exhaustion
+            # actually mean something.
+            self.state = EntityState.HUNT
+            self._move_toward(quarry.x, quarry.y, world)
+
         if self.distance_to(quarry) <= CAPTURE_RANGE and self.age >= self._capture_rest_until:
             self._attempt_capture(quarry)
+        return None
 
     def _pick_quarry(self, spatial: SpatialGrid) -> Entity | None:
         """Choose prey to run down: whichever visible animal is closest.
@@ -434,6 +533,193 @@ class Entity:
         self.energy = min(self.body.max_energy, self.energy + meal)
         self._quarry = None
         self.state = EntityState.REST
+
+    # --- Family and herd steering ------------------------------------------ #
+
+    def _social_target(self, spatial: SpatialGrid) -> tuple[float, float] | None:
+        """A point to drift toward from family and herd pulls, or None.
+
+        Family pull is unranged — a parent is always worth finding, however far
+        it has wandered. Herd cohesion only feels neighbours within
+        ``HERD_RADIUS`` and is scaled by this animal's own ``sociality`` gene,
+        so how strongly (or whether) it clusters at all is itself heritable.
+        """
+        fx, fy, fweight = self._family_push()
+        hx, hy, hweight = self._herd_push(spatial)
+        weight = fweight + hweight
+        if weight <= 0.0:
+            return None
+        return self.x + fx + hx, self.y + fy + hy
+
+    def _family_push(self) -> tuple[float, float, float]:
+        """Pull toward living parents (juvenile) and juvenile young (parent)."""
+        push_x = push_y = 0.0
+        weight = 0.0
+
+        if self.stage is LifeStage.JUVENILE and self._parents is not None:
+            for parent in self._parents:
+                if parent.alive:
+                    push_x += (parent.x - self.x) * FAMILY_JUVENILE_PULL
+                    push_y += (parent.y - self.y) * FAMILY_JUVENILE_PULL
+                    weight += FAMILY_JUVENILE_PULL
+        for child in self._children:
+            if child.alive and child.stage is LifeStage.JUVENILE:
+                push_x += (child.x - self.x) * FAMILY_PARENT_PULL
+                push_y += (child.y - self.y) * FAMILY_PARENT_PULL
+                weight += FAMILY_PARENT_PULL
+
+        return push_x, push_y, weight
+
+    def _herd_push(self, spatial: SpatialGrid) -> tuple[float, float, float]:
+        """Cohesion toward same-species neighbours, weighted by sociality; and
+        separation from any that are crowding too close."""
+        centre_x = centre_y = 0.0
+        separation_x = separation_y = 0.0
+        neighbours = 0
+        for other in spatial.nearby(self.x, self.y, HERD_RADIUS):
+            if other is self or other.diet is not self.diet or not other.alive:
+                continue
+            distance = self.distance_to(other)
+            if distance > HERD_RADIUS or distance < 1e-6:
+                continue
+            neighbours += 1
+            centre_x += other.x
+            centre_y += other.y
+            if distance < HERD_SEPARATION_RADIUS:
+                separation_x -= (other.x - self.x) / distance
+                separation_y -= (other.y - self.y) / distance
+
+        if neighbours == 0:
+            return 0.0, 0.0, 0.0
+
+        push_x = push_y = 0.0
+        weight = 0.0
+        cohesion = self.genome.sociality * HERD_COHESION_WEIGHT
+        if cohesion > 0.0:
+            push_x += (centre_x / neighbours - self.x) * cohesion
+            push_y += (centre_y / neighbours - self.y) * cohesion
+            weight += cohesion
+        # Only counts as a push if someone was actually close enough to crowd —
+        # otherwise this would mark `weight` nonzero and contribute a "target"
+        # pinned at the animal's own position, which corrupts the forage blend
+        # into undershooting its grass target for no reason.
+        if separation_x != 0.0 or separation_y != 0.0:
+            push_x += separation_x * HERD_SEPARATION_WEIGHT
+            push_y += separation_y * HERD_SEPARATION_WEIGHT
+            weight += HERD_SEPARATION_WEIGHT
+
+        return push_x, push_y, weight
+
+    # --- Mating -------------------------------------------------------------- #
+
+    def _pursue_mate(self, world: World, spatial: SpatialGrid) -> tuple[bool, Entity | None]:
+        """Look for a mate, approach one, and court.
+
+        Returns:
+            ``(True, child)`` if this tick was spent seeking or courting —
+            ``child`` is set only on the tick a pairing conceives. ``(False,
+            None)`` means nothing eligible was found, so the caller should fall
+            through to its usual behaviour: a loner just keeps foraging.
+        """
+        mate = self._mate
+        if mate is None or not mate.alive or mate._mate is not self:
+            # No live, reciprocal pairing — free to look for a new one.
+            self._mate = None
+            self._court_ticks = 0
+            if not self._can_breed():
+                return False, None
+            if self.energy < REPRODUCTION_THRESHOLD * self.body.max_energy:
+                return False, None
+
+            candidate = self._best_mate_candidate(spatial)
+            if candidate is None or candidate._best_mate_candidate(spatial) is not self:
+                return False, None
+
+            self._mate = mate = candidate
+            candidate._mate = self
+
+        # A freshly-formed pair may already be standing close enough to court —
+        # checked here rather than assumed, so two animals that meet within
+        # COURTSHIP_RANGE start courting immediately instead of wasting a tick
+        # walking towards a partner they have already reached.
+        if self.distance_to(mate) <= COURTSHIP_RANGE:
+            self.state = EntityState.COURT
+            self._court_ticks += 1
+            ready = (
+                self._court_ticks >= COURTSHIP_DURATION and mate._court_ticks >= COURTSHIP_DURATION
+            )
+            if ready and self._tie_id < mate._tie_id:
+                return True, self._conceive_with(mate, world)
+            return True, None
+
+        self.state = EntityState.SEEK_MATE
+        self._move_toward(mate.x, mate.y, world)
+        return True, None
+
+    def _best_mate_candidate(self, spatial: SpatialGrid) -> Entity | None:
+        """The best-scoring visible, unpaired, ready adult of this animal's
+        own species — or None if nothing qualifies."""
+        best: Entity | None = None
+        best_score = -1.0
+        for other in spatial.nearby(self.x, self.y, self.genome.vision):
+            if other is self or other.diet is not self.diet or not other.alive:
+                continue
+            if other._mate is not None:
+                continue  # already spoken for
+            if not other._can_breed():
+                continue
+            if other.energy < REPRODUCTION_THRESHOLD * other.body.max_energy:
+                continue
+            if not self.can_see(other):
+                continue
+            score = self._mate_score(other)
+            if score > best_score:
+                best_score = score
+                best = other
+        return best
+
+    def _mate_score(self, candidate: Entity) -> float:
+        """How attractive ``candidate`` looks: condition first, size second."""
+        energy_ratio = candidate.energy / candidate.body.max_energy
+        size_low, size_high = Genome._BOUNDS["size"]
+        size_norm = (candidate.genome.size - size_low) / (size_high - size_low)
+        return MATE_SCORE_ENERGY_WEIGHT * energy_ratio + MATE_SCORE_SIZE_WEIGHT * size_norm
+
+    def _conceive_with(self, mate: Entity, world: World) -> Entity:
+        """Produce a child with ``mate`` via crossover, and pay for it together."""
+        midpoint_x = (self.x + mate.x) / 2.0
+        midpoint_y = (self.y + mate.y) / 2.0
+        cx, cy = self._birth_spot(midpoint_x, midpoint_y, world)
+        child = Entity(
+            cx,
+            cy,
+            self.diet,
+            self.genome.crossover(mate.genome, self._rng),
+            rng=self._rng,
+            parents=(self, mate),
+        )
+
+        # A newborn body cannot hold a full-grown share of energy; the parents
+        # only give what the child can actually keep, split evenly between them
+        # — the same invariant asexual reproduction kept, now paid by two.
+        given = min(
+            CHILD_ENERGY_FRACTION * (self.body.max_energy + mate.body.max_energy) / 2.0,
+            child.body.max_energy,
+        )
+        child.energy = given
+        self.energy -= given / 2.0
+        mate.energy -= given / 2.0
+
+        for parent in (self, mate):
+            parent.offspring += 1
+            parent._breeding_rest_until = parent.age + round(
+                BREEDING_COOLDOWN_FRACTION * parent.lifespan
+            )
+            parent._mate = None
+            parent._court_ticks = 0
+            parent._children.append(child)
+
+        return child
 
     # --- Movement ---------------------------------------------------------- #
 
@@ -502,38 +788,17 @@ class Entity:
             return False
         return self.age >= self._breeding_rest_until
 
-    def _try_reproduce(self, world: World) -> Entity | None:
-        if not self._can_breed():
-            return None
-        if self.energy < REPRODUCTION_THRESHOLD * self.body.max_energy:
-            return None
-
-        cx, cy = self._birth_spot(world)
-        child = Entity(cx, cy, self.diet, self.genome.mutate(self._rng), rng=self._rng)
-
-        # A newborn body is a fraction of its parent's and cannot hold a
-        # parent-sized share of energy. Transferring the full share regardless
-        # would start it at nearly twice its own capacity — an invariant every
-        # other path respects — so the parent only gives what fits.
-        given = min(CHILD_ENERGY_FRACTION * self.body.max_energy, child.body.max_energy)
-        child.energy = given
-        self.energy -= given
-
-        self.offspring += 1
-        self._breeding_rest_until = self.age + round(BREEDING_COOLDOWN_FRACTION * self.lifespan)
-        return child
-
-    def _birth_spot(self, world: World) -> tuple[float, float]:
-        """Find somewhere beside the parent to put a newborn.
+    def _birth_spot(self, ox: float, oy: float, world: World) -> tuple[float, float]:
+        """Find somewhere near ``(ox, oy)`` to put a newborn.
 
         Without this a child can land in a lake or on a mountainside, where it
         is stranded: nothing can walk out of a cell it could never walk into.
         """
         for _ in range(6):
-            cx = self.x + self._rng.uniform(-1.0, 1.0)
-            cy = self.y + self._rng.uniform(-1.0, 1.0)
+            cx = ox + self._rng.uniform(-1.0, 1.0)
+            cy = oy + self._rng.uniform(-1.0, 1.0)
             cx = max(0.0, min(world.width - 1e-6, cx))
             cy = max(0.0, min(world.height - 1e-6, cy))
             if world.is_walkable(int(cx), int(cy)):
                 return cx, cy
-        return self.x, self.y
+        return ox, oy

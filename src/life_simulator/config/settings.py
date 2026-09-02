@@ -116,7 +116,7 @@ GRAZE_ENERGY_GAIN: float = 0.40
 
 #: Energy a parent hands a newborn, as a fraction of the parent's own capacity.
 #: A newborn body cannot hold all of it, so the transfer is clamped to what
-#: fits — see ``Entity._try_reproduce``.
+#: fits — see ``Entity._conceive_with``.
 #:
 #: This was once set high on purpose, to throttle breeding that had no other
 #: limit. The lifecycle's cap of two offspring per life now does that job, so a
@@ -221,6 +221,61 @@ FERTILITY_END_FRACTION: float = 0.80
 #: Rest between births, as a fraction of a lifetime. With the window above,
 #: this is what holds a life to one or two offspring rather than a burst.
 BREEDING_COOLDOWN_FRACTION: float = 0.25
+
+
+# --- Mating -------------------------------------------------------------
+# Everyone is single-sex: any two ready adults of the same species can pair.
+# Pairing is mutual — each must independently pick the other as their best
+# candidate — so courtship is a proposal both sides have to accept, not a
+# claim one side can force.
+
+#: How a ready adult scores a candidate. Condition dominates — an honest
+#: signal of whether the candidate can actually support young right now — with
+#: size a secondary preference. The two must sum to 1 so the score stays a
+#: comparable [0, 1]-ish quantity regardless of which term dominates.
+MATE_SCORE_ENERGY_WEIGHT: float = 0.6
+MATE_SCORE_SIZE_WEIGHT: float = 0.4
+
+#: Distance at which an approaching pair actually starts courting.
+COURTSHIP_RANGE: float = 1.5
+
+#: Ticks a mutual pair must spend together, within range, before conceiving.
+COURTSHIP_DURATION: int = 15
+
+
+# --- Family and herd steering ------------------------------------------
+# Groups are not objects the simulation tracks — they emerge from steering
+# nudges applied to whatever an animal was already walking towards. Family
+# pull has no range limit (a parent is always worth finding); herd cohesion is
+# short-ranged, since you cluster with the crowd you can actually see.
+
+#: Strength of a juvenile's pull toward its living parents. Strong on purpose:
+#: this is what keeps a family together through the vulnerable early stage.
+FAMILY_JUVENILE_PULL: float = 1.2
+
+#: Strength of a parent's pull toward its still-juvenile young. Mild — a
+#: parent stays roughly nearby rather than shepherding closely.
+FAMILY_PARENT_PULL: float = 0.3
+
+#: How far a same-species neighbour is felt for herd cohesion.
+HERD_RADIUS: float = 10.0
+
+#: Inside this distance, cohesion flips to separation — no stacking.
+HERD_SEPARATION_RADIUS: float = 2.0
+
+#: Cohesion strength, scaled again by the individual's own `sociality` gene —
+#: a herd is not one setting, it is a distribution the gene can drift along.
+HERD_COHESION_WEIGHT: float = 0.5
+HERD_SEPARATION_WEIGHT: float = 1.0
+
+#: While actively foraging, how much the route bends towards family/herd on
+#: top of the grass target — food comes first, the pull is a nudge not a vote.
+FORAGE_SOCIAL_BLEND: float = 0.25
+
+#: How far a fleeing herbivore's alarm reaches. A neighbour that could never
+#: have spotted the predator itself still bolts — herds see with more eyes
+#: than any one member has.
+ALERT_RADIUS: float = 8.0
 
 
 # --- Phenotype: how genes become abilities ----------------------------------

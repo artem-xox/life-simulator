@@ -7,6 +7,9 @@ its own, then a whole-population run checks the rules hold together.
 
 from __future__ import annotations
 
+import itertools
+import random
+
 import numpy as np
 
 from life_simulator.config.settings import (
@@ -39,14 +42,25 @@ def _meadow(size: int = 64) -> World:
 #: the body an animal is built with is the body the tests measure.
 _ADULT_AGE = LIFESPAN_BASE // 2
 
+#: Every helper-built animal gets its own seeded RNG rather than the unseeded
+#: default. Without this, tests that run a scenario out for many ticks (a
+#: chase, a courtship) are flaky: two entities racing on unseeded randomness
+#: means a rare unlucky draw can flip an outcome from one run to the next. The
+#: counter just has to be distinct per animal, not meaningful.
+_rng_seeds = itertools.count(1)
+
 
 def _grazer(x: float = 32.0, y: float = 32.0, **genes: float) -> Entity:
-    return Entity(x, y, Diet.HERBIVORE, Genome(**genes), age=_ADULT_AGE)
+    return Entity(
+        x, y, Diet.HERBIVORE, Genome(**genes), age=_ADULT_AGE, rng=random.Random(next(_rng_seeds))
+    )
 
 
 def _hunter(x: float = 32.0, y: float = 32.0, **genes: float) -> Entity:
     genes.setdefault("vision", 10.0)
-    return Entity(x, y, Diet.CARNIVORE, Genome(**genes), age=_ADULT_AGE)
+    return Entity(
+        x, y, Diet.CARNIVORE, Genome(**genes), age=_ADULT_AGE, rng=random.Random(next(_rng_seeds))
+    )
 
 
 def _step_all(animals: list[Entity], world: World) -> None:
@@ -252,6 +266,42 @@ def test_no_chase_runs_forever() -> None:
             chasing += 1
 
     assert chasing < 600
+
+
+def test_an_exhausted_predator_walks_instead_of_sprinting_after_new_prey() -> None:
+    """Giving up on one exhausted chase must not sprint straight into another.
+
+    A population thick with visible prey always has a next target, so without
+    this an exhausted predator would chain from sprint to sprint and spend
+    itself to death rather than recovering. Two candidates guarantee a fresh
+    quarry is available the instant the first is dropped as too far to chase.
+    """
+    world = _meadow()
+    hunter = _hunter(x=32.0, vision=10.0)
+    hunter.energy = 0.10 * hunter.body.max_energy  # below CHASE_EXHAUSTION_FRACTION
+    far_prey = _grazer(x=39.0, stealth=0.0)  # out of capture range either way
+    another_prey = _grazer(x=39.5, stealth=0.0)
+
+    before = hunter.energy
+    _step_all([hunter, far_prey, another_prey], world)
+
+    assert hunter.state is EntityState.HUNT  # not CHASE
+    spent = before - hunter.energy
+    assert spent < hunter.body.sprint_cost  # walked, did not pay the sprint cost
+
+
+def test_an_exhausted_predator_still_takes_a_free_capture_within_reach() -> None:
+    """Exhaustion should stop new chases, not a shot at prey already in reach."""
+    world = _meadow()
+    hunter = _hunter(x=32.0, vision=10.0)
+    hunter.energy = 0.10 * hunter.body.max_energy
+    prey = _grazer(x=32.5, stealth=0.0)  # already within CAPTURE_RANGE
+    hunter._rng.random = lambda: 1.0  # above any escape chance: forces a kill
+
+    _step_all([hunter, prey], world)
+
+    assert not prey.alive
+    assert prey.death_cause is DeathCause.PREDATION
 
 
 # --- Captures --------------------------------------------------------------

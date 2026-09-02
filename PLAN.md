@@ -12,7 +12,7 @@ the roadmap: stages, tickets, and acceptance criteria.
 | 8 | Genome 2.0 | new gene set, phenotype trade-offs, crossover | ✅ done |
 | 9 | Lifecycle | juveniles, 1–2 births per life, death causes | ✅ done |
 | 10 | Behaviour | state machines, stealth detection, chase & escape | ✅ done |
-| 11 | Mating & social | sexual selection, courtship, families, herds | ⬜ todo |
+| 11 | Mating & social | sexual selection, courtship, families, herds | ✅ done |
 | 12 | Visuals 2.0 | procedural animal sprites, state cues, LOD | ⬜ todo |
 | 13 | Analytics 2.0 | event log, live charts, HTML report, presets | ⬜ todo |
 | 14 | Balance & polish | tuning, shipped presets, performance, docs | ⬜ todo |
@@ -97,11 +97,11 @@ Goal: sexual selection, courtship, families, and emergent herds.
 
 | Ticket | Description | Acceptance |
 |---|---|---|
-| 11.1 | `SEEK_MATE`: readiness conditions (adult, energy, fertility window, count < 2); candidate scoring `0.6·energy_ratio + 0.4·size_norm`; mutual acceptance | best-scoring mutual pair forms; loners keep foraging |
-| 11.2 | `COURT`: approach, courtship timer together, child spawned via crossover near parents; both pay energy share, both `repro_count += 1` | birth event recorded with both parents |
-| 11.3 | Family bonds: juveniles steer strongly toward parents; parents mildly toward offspring; bond dissolves at adulthood | juvenile avg distance to parent bounded (test) |
-| 11.4 | Herd steering: cohesion toward same-species neighbours × `sociality` gene + close-range separation; applies to both species | high-sociality population clusters measurably more than low (metric test) |
-| 11.5 | Shared vigilance: a fleeing herbivore alerts same-species neighbours within a radius (they flee too) | alert propagation test |
+| 11.1 | `SEEK_MATE`: readiness conditions (adult, energy, fertility window, offspring < cap); candidate scoring `0.6·energy_ratio + 0.4·size_norm`; mutual acceptance | ✅ best-scoring mutual pair forms; loners keep foraging; an already-paired candidate cannot be poached |
+| 11.2 | `COURT`: approach, courtship timer together, child spawned via `Genome.crossover` near both parents; both pay an even energy share, both `offspring += 1` | ✅ child conceived with both parents credited; energy transfer is a pure handover |
+| 11.3 | Family bonds: juveniles steer strongly toward parents; parents mildly toward offspring; bond dissolves at adulthood | ✅ juvenile distance to parent stays bounded over a run; the pull is gone once the child is grown |
+| 11.4 | Herd steering: cohesion toward same-species neighbours × `sociality` gene + close-range separation; applies to both species | ✅ high-sociality population clusters measurably more than low, averaged over 5 seeds |
+| 11.5 | Shared vigilance: a fleeing herbivore alerts same-species neighbours within a radius (they flee too) | ✅ a neighbour that could not itself detect the predator still flees when alerted |
 
 ---
 

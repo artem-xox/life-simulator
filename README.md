@@ -16,8 +16,9 @@ See [DESIGN.md](DESIGN.md) for the design and [PLAN.md](PLAN.md) for the roadmap
 | 8 | Genome 2.0: new gene set, phenotype trade-offs, crossover | ✅ done |
 | 9 | Lifecycle: juveniles, limited breeding, causes of death | ✅ done |
 | 10 | Behaviour: hunt/rest modes, stealth detection, chases | ✅ done |
-| 11 | Mating and social behaviour: sexual selection, families, herds | ⬜ next |
-| 12–14 | Sprites, analytics, balance | ⬜ todo |
+| 11 | Mating and social behaviour: sexual selection, families, herds | ✅ done |
+| 12 | Visuals: procedural sprites, animation, LOD | ⬜ next |
+| 13–14 | Analytics, balance | ⬜ todo |
 
 ## The world
 
@@ -46,6 +47,16 @@ independently, but what a body can actually *do* is derived from them with
 physical trade-offs. Growing large banks a reserve that outgrows the body and
 costs less upkeep per unit of itself, and pays for it in pace, concealment and
 absolute upkeep. Click any animal to see its genes beside the body they made.
+
+Nobody breeds alone. A ready adult scores every visible, unpaired candidate of
+its own species on condition and size; a pairing forms only when both sides
+pick each other, and once mutual, neither one keeps looking — no third animal
+can poach a committed pair. The pair courts, then conceives via crossover, both
+parents paying an even share of the child's energy. Juveniles pull hard toward
+their living parents; every animal drifts gently toward its own kind by
+however much its `sociality` gene calls for; and a herbivore that spots a
+predator shares the alarm — nearby herd-mates flee the real danger even if
+they never saw it themselves.
 
 Grass grows only in the forest, and it grows *logistically* — from what is
 still standing, fastest at middling density. A cell grazed to bare earth has
@@ -159,10 +170,26 @@ Makefile              dev workflow shortcuts
 
 ## Known gaps
 
-The ecosystem is **not balanced yet**, though it now usually persists: across
-six seeds, five herbivore populations survived 15 000 ticks on a 320×200 map.
+Herbivores are solid: across six seeds on a 320×200 map, most populations run
+the full length of a multi-thousand-tick experiment, with old age — not
+starvation — the leading cause of death.
 
-Predators are the weak point. A carnivore still feeds by draining energy on
-contact — there is no hunting, no chase and no rest after a kill — so predation
-accounts for about 1% of deaths and carnivores usually die out early. Stage 10
-replaces that model wholesale. The tuning pass is stage 14.
+**Predators are not.** Every measured run so far goes extinct within a few
+hundred ticks, before the population has time to do much evolving at all.
+This was true at the end of stage 10 and is still true after stage 11's
+family, herd and vigilance mechanics landed. Instrumenting an actual run turns
+up a fairly clean picture: hunts that connect succeed often (~86% of capture
+attempts land a kill), so it is not a broken chase or a broken capture roll —
+it is that a hunt-rest cycle takes long enough, relative to how little energy
+a hunt in progress can safely spend, that a small starting population reliably
+runs out of margin before it runs out of ticks. Raising the energy a kill
+pays out, and disabling shared vigilance, each measurably slow the decline
+across six seeds — and neither comes close to stopping it, so this is not a
+one-constant problem. (Vigilance was left alone regardless: DESIGN.md wants
+grouped prey to spot predators earlier, and disabling it to help predators
+survive would fight that on purpose.) One real bug was found and fixed along
+the way — an exhausted predator that gave up a chase would immediately sprint
+into a fresh one, since a full population always offers another visible
+target — but fixing it changed *how* predators die, not whether they mostly
+do. Solving this for real is stage 14's tuning pass, or a dedicated
+investigation before it.

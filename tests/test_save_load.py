@@ -90,3 +90,32 @@ def test_lifecycle_state_survives_a_round_trip(tmp_path) -> None:
         assert restored.offspring == original.offspring
         assert restored.stage is original.stage
         assert restored.body.body_size == original.body.body_size
+
+
+def test_courtship_and_family_state_reset_cleanly_on_load(tmp_path) -> None:
+    """These relationships link one entity to another, not to itself.
+
+    The save format only ever stores an entity's own scalar fields — this is
+    already true for the older flee/hunt state, and mating adds the same kind
+    of transient, other-entity-referencing state. A save mid-courtship must
+    not crash, and a reload should come back as a clean slate rather than a
+    half-restored (and now dangling) relationship.
+    """
+    eco, world_cfg, species = _make_ecosystem()
+    herbivores = [e for e in eco.entities if e.diet.name == "HERBIVORE"]
+    a, b = herbivores[0], herbivores[1]
+    a._mate, b._mate = b, a
+    a._court_ticks = 3
+    a._parents = (herbivores[2], herbivores[3])
+    herbivores[2]._children.append(a)
+
+    path = tmp_path / "save.json"
+    save_game(path, eco, world_cfg, species)  # must not raise
+
+    loaded, _, _ = load_game(path)
+
+    for entity in loaded.entities:
+        assert entity._mate is None
+        assert entity._court_ticks == 0
+        assert entity._parents is None
+        assert entity._children == []

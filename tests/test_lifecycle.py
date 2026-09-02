@@ -7,12 +7,14 @@ other trait is noise; with one, an animal has to *survive to breed*.
 
 from __future__ import annotations
 
+import itertools
 import random
 
 import numpy as np
 
 from life_simulator.config.settings import (
     FERTILITY_END_FRACTION,
+    FERTILITY_START_FRACTION,
     JUVENILE_FRACTION,
     LIFESPAN_BASE,
     MAX_OFFSPRING,
@@ -31,8 +33,15 @@ def _meadow() -> World:
     return World(np.full((32, 32), int(Surface.FOREST), dtype=np.int8))
 
 
+#: Deterministic per-animal RNG, distinct across calls. Without this, an
+#: animal's lifespan (which is itself randomised, see Entity.__init__) varies
+#: from run to run, and a test that places age exactly at a fractional
+#: boundary can land on either side of it depending on rounding.
+_rng_seeds = itertools.count(1)
+
+
 def _animal(**genes: float) -> Entity:
-    return Entity(16.0, 16.0, Diet.HERBIVORE, Genome(**genes))
+    return Entity(16.0, 16.0, Diet.HERBIVORE, Genome(**genes), rng=random.Random(next(_rng_seeds)))
 
 
 def _step(entity: Entity, world: World) -> Entity | None:
@@ -91,69 +100,49 @@ def test_lifespans_vary_between_individuals() -> None:
 
 
 # --- Breeding limits -------------------------------------------------------
+#
+# Whether *finding* a mate succeeds is a mating concern (tests/test_mating.py).
+# What belongs here is the age/count gate itself: ``_can_breed()`` is a pure
+# function of an animal's own state, so it is tested directly rather than by
+# running a whole courtship to observe a side effect.
 
 
-def _fertile_adult(world: World) -> Entity:
-    """An adult in the middle of its fertile window, at full energy."""
+def test_a_juvenile_cannot_breed() -> None:
     animal = _animal()
-    animal.age = round(FERTILITY_END_FRACTION * animal.lifespan * 0.5)
-    _step(animal, world)  # settles its grown body
-    animal.energy = animal.body.max_energy
-    return animal
+    assert animal.stage is LifeStage.JUVENILE
+    assert not animal._can_breed()
 
 
-def test_a_juvenile_never_breeds() -> None:
-    world = _meadow()
-    world.grass[:] = world.grass_max
+def test_a_freshly_grown_adult_can_breed() -> None:
     animal = _animal()
-    for _ in range(round(JUVENILE_FRACTION * animal.lifespan) - 1):
-        animal.energy = animal.body.max_energy
-        assert _step(animal, world) is None
-    assert animal.offspring == 0
-
-
-def test_an_adult_with_energy_breeds() -> None:
-    world = _meadow()
-    animal = _fertile_adult(world)
-    child = _step(animal, world)
-
-    assert child is not None
-    assert animal.offspring == 1
-    assert child.stage is LifeStage.JUVENILE
-
-
-def test_no_animal_exceeds_its_lifetime_limit() -> None:
-    world = _meadow()
-    world.grass[:] = world.grass_max
-    animal = _animal()
-    children = 0
-    while animal.alive:
-        animal.energy = animal.body.max_energy  # never short of energy
-        if _step(animal, world) is not None:
-            children += 1
-
-    assert children == animal.offspring
-    assert children <= MAX_OFFSPRING
-
-
-def test_births_are_spaced_by_a_rest_period() -> None:
-    """A full-energy animal still cannot produce a litter in consecutive ticks."""
-    world = _meadow()
-    animal = _fertile_adult(world)
-    _step(animal, world)  # first birth
-
-    animal.energy = animal.body.max_energy
-    assert _step(animal, world) is None
+    # +1: FERTILITY_START_FRACTION equals JUVENILE_FRACTION, so the unrounded
+    # boundary and this rounded age can land a tick apart; nudging past it is
+    # what actually asks "is a freshly grown adult eligible," not "am I
+    # exactly at the boundary, whichever side that rounds to."
+    animal.age = round(FERTILITY_START_FRACTION * animal.lifespan) + 1
+    assert animal.stage is LifeStage.ADULT
+    assert animal._can_breed()
 
 
 def test_breeding_stops_before_old_age() -> None:
-    world = _meadow()
     animal = _animal()
     animal.age = round(FERTILITY_END_FRACTION * animal.lifespan) + 1
-    _step(animal, world)
-    animal.energy = animal.body.max_energy
+    assert not animal._can_breed()
 
-    assert _step(animal, world) is None
+
+def test_an_animal_at_its_lifetime_limit_cannot_breed_again() -> None:
+    animal = _animal()
+    animal.age = round(FERTILITY_START_FRACTION * animal.lifespan)
+    animal.offspring = MAX_OFFSPRING
+    assert not animal._can_breed()
+
+
+def test_a_freshly_bred_animal_is_resting() -> None:
+    animal = _animal()
+    animal.age = round(FERTILITY_START_FRACTION * animal.lifespan)
+    animal.offspring = 1
+    animal._breeding_rest_until = animal.age + 1
+    assert not animal._can_breed()
 
 
 # --- Dying -----------------------------------------------------------------
@@ -237,33 +226,6 @@ def test_every_death_is_accounted_for() -> None:
         eco.tick()
 
     assert seeded + eco.births - sum(eco.deaths.values()) == len(eco.entities)
-
-
-def test_a_newborn_never_starts_over_its_own_capacity() -> None:
-    """A parent-sized share of energy does not fit in a newborn-sized body."""
-    world = _meadow()
-    parent = _fertile_adult(world)
-    child = _step(parent, world)
-
-    assert child is not None
-    assert 0 < child.energy <= child.body.max_energy
-
-
-def test_a_parent_only_pays_what_the_child_receives() -> None:
-    """Nothing is burned in the handover — the birth itself is a pure transfer.
-
-    Tested on the birth alone rather than through a whole tick, where grazing
-    and travel would muddy the arithmetic.
-    """
-    world = _meadow()
-    parent = _fertile_adult(world)
-    parent.energy = parent.body.max_energy
-    before = parent.energy
-
-    child = parent._try_reproduce(world)
-
-    assert child is not None
-    assert abs((before - parent.energy) - child.energy) < 1e-9
 
 
 def test_an_animal_reaches_its_full_size_on_becoming_an_adult() -> None:

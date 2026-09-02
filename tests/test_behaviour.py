@@ -7,6 +7,9 @@ its own, then a whole-population run checks the rules hold together.
 
 from __future__ import annotations
 
+import itertools
+import random
+
 import numpy as np
 
 from life_simulator.config.settings import (
@@ -39,14 +42,25 @@ def _meadow(size: int = 64) -> World:
 #: the body an animal is built with is the body the tests measure.
 _ADULT_AGE = LIFESPAN_BASE // 2
 
+#: Every helper-built animal gets its own seeded RNG rather than the unseeded
+#: default. Without this, tests that run a scenario out for many ticks (a
+#: chase, a courtship) are flaky: two entities racing on unseeded randomness
+#: means a rare unlucky draw can flip an outcome from one run to the next. The
+#: counter just has to be distinct per animal, not meaningful.
+_rng_seeds = itertools.count(1)
+
 
 def _grazer(x: float = 32.0, y: float = 32.0, **genes: float) -> Entity:
-    return Entity(x, y, Diet.HERBIVORE, Genome(**genes), age=_ADULT_AGE)
+    return Entity(
+        x, y, Diet.HERBIVORE, Genome(**genes), age=_ADULT_AGE, rng=random.Random(next(_rng_seeds))
+    )
 
 
 def _hunter(x: float = 32.0, y: float = 32.0, **genes: float) -> Entity:
     genes.setdefault("vision", 10.0)
-    return Entity(x, y, Diet.CARNIVORE, Genome(**genes), age=_ADULT_AGE)
+    return Entity(
+        x, y, Diet.CARNIVORE, Genome(**genes), age=_ADULT_AGE, rng=random.Random(next(_rng_seeds))
+    )
 
 
 def _step_all(animals: list[Entity], world: World) -> None:

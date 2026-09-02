@@ -353,7 +353,7 @@ class SimScreen(Screen):
         cy += 20
         self._blit_text(
             surface,
-            f"{entity.stage.name.lower()}  {entity.state.name.lower()}",
+            f"{entity.stage.name.lower()}  {entity.state.name.lower().replace('_', ' ')}",
             x + 12,
             cy,
             _HUD_HEADING,

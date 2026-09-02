@@ -183,9 +183,11 @@ def test_old_age_is_recorded() -> None:
 
 
 def test_predation_is_recorded() -> None:
+    """No capture is ever certain, so the roll is forced rather than retried."""
     world = _meadow()
     prey = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(size=0.5), energy=0.5)
     hunter = Entity(16.5, 16.0, Diet.CARNIVORE, Genome(size=2.0, vision=10.0), energy=5.0)
+    hunter._rng.random = lambda: 1.0  # above any escape chance: the prey is caught
     grid = SpatialGrid()
     grid.rebuild([prey, hunter])
 

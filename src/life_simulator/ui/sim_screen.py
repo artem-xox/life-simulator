@@ -351,7 +351,13 @@ class SimScreen(Screen):
             surface, f"age {entity.age}/{entity.lifespan}", x + col_w + 12, cy, _HUD_TEXT
         )
         cy += 20
-        self._blit_text(surface, entity.stage.name.lower(), x + 12, cy, _HUD_HEADING)
+        self._blit_text(
+            surface,
+            f"{entity.stage.name.lower()}  {entity.state.name.lower()}",
+            x + 12,
+            cy,
+            _HUD_HEADING,
+        )
         self._blit_text(
             surface,
             f"young {entity.offspring}/{MAX_OFFSPRING}",

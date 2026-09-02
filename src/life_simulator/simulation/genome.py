@@ -58,19 +58,26 @@ class Genome:
         "mutation_rate": (0.005, 0.25),
     }
 
-    def mutate(self) -> Genome:
-        """Return a new Genome with Gaussian noise applied to every bounded gene."""
+    def mutate(self, rng: random.Random | None = None) -> Genome:
+        """Return a new Genome with Gaussian noise applied to every bounded gene.
+
+        Args:
+            rng: generator to draw from. The simulation passes its own seeded
+                one so a run reproduces; callers with no stake in determinism
+                may omit it.
+        """
+        draw = rng if rng is not None else random
         kwargs: dict[str, float] = {}
         for f in fields(self):
             value: float = getattr(self, f.name)
             if f.name in self._BOUNDS:
                 low, high = self._BOUNDS[f.name]
-                value += random.gauss(0.0, self.mutation_rate * (high - low))
+                value += draw.gauss(0.0, self.mutation_rate * (high - low))
                 value = max(low, min(high, value))
             kwargs[f.name] = value
         return Genome(**kwargs)
 
-    def crossover(self, other: Genome) -> Genome:
+    def crossover(self, other: Genome, rng: random.Random | None = None) -> Genome:
         """Return a child genome: each gene from one parent, then mutated once.
 
         Uniform crossover — an independent coin flip per gene — rather than
@@ -80,10 +87,11 @@ class Genome:
 
         The child mutates at the rate it inherited, not its parents'.
         """
+        draw = rng if rng is not None else random
         inherited = Genome(
-            **{f.name: getattr(random.choice((self, other)), f.name) for f in fields(self)}
+            **{f.name: getattr(draw.choice((self, other)), f.name) for f in fields(self)}
         )
-        return inherited.mutate()
+        return inherited.mutate(rng)
 
     def copy(self) -> Genome:
         """Return a shallow copy with identical gene values."""

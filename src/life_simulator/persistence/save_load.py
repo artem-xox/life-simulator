@@ -144,7 +144,9 @@ def load_game(path: str | Path) -> tuple[Ecosystem, WorldConfig, list[SpeciesCon
         ent.body = Phenotype.of(ent.genome, ent.maturity)
         ent._fully_grown = ent.maturity >= 1.0
 
-    eco = Ecosystem.from_saved(world, entities, int(data["tick_count"]))
+    eco = Ecosystem.from_saved(world, entities, int(data["tick_count"]), seed=world_cfg.seed)
+    for ent in entities:
+        ent._rng = eco.rng
     log.info(
         "loaded game  path=%s  tick=%d  entities=%d",
         path,

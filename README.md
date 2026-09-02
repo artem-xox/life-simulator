@@ -15,8 +15,9 @@ See [DESIGN.md](DESIGN.md) for the design and [PLAN.md](PLAN.md) for the roadmap
 | 7 | Map 2.0: island with rivers, lakes, beaches and mountains; grass layer; full-screen | ✅ done |
 | 8 | Genome 2.0: new gene set, phenotype trade-offs, crossover | ✅ done |
 | 9 | Lifecycle: juveniles, limited breeding, causes of death | ✅ done |
-| 10 | Behaviour: hunt/rest modes, stealth detection, chases | ⬜ next |
-| 11–14 | Mating, sprites, analytics, balance | ⬜ todo |
+| 10 | Behaviour: hunt/rest modes, stealth detection, chases | ✅ done |
+| 11 | Mating and social behaviour: sexual selection, families, herds | ⬜ next |
+| 12–14 | Sprites, analytics, balance | ⬜ todo |
 
 ## The world
 

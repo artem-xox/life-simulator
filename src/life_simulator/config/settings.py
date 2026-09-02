@@ -114,16 +114,6 @@ GRAZE_AMOUNT: float = 2.0
 #: rather than every 2-3 ticks.
 GRAZE_ENERGY_GAIN: float = 0.40
 
-#: Energy stolen from prey per tick while within ATTACK_RANGE (carnivores).
-#: Low value forces several ticks of sustained contact to drain a prey's energy.
-ATTACK_DAMAGE: float = 1.8
-
-#: Distance in cells within which a carnivore can attack.
-ATTACK_RANGE: float = 1.5
-
-#: Fraction of energy stolen from prey that the attacker keeps.
-ATTACK_EFFICIENCY: float = 0.40
-
 #: Energy a parent hands a newborn, as a fraction of the parent's own capacity.
 #: A newborn body cannot hold all of it, so the transfer is clamped to what
 #: fits — see ``Entity._try_reproduce``.
@@ -141,6 +131,55 @@ REPRODUCTION_THRESHOLD: float = 0.78
 
 #: Ticks between choosing a new random wander target.
 WANDER_INTERVAL: int = 10
+
+
+# --- Behaviour --------------------------------------------------------------
+# Animals run a small state machine. A herbivore forages, rests when full and
+# flees when it sees a predator; a predator hunts, chases, and then digests for
+# a long while after a kill. Which state an animal is in is the single biggest
+# influence on what happens to it, so these constants matter more to a run than
+# most of the numbers above.
+
+#: How much faster an animal moves when running for its life, or after a life.
+SPRINT_SPEED_MULTIPLIER: float = 1.6
+
+#: A herbivore stops grazing and rests once it is this full.
+GRAZER_REST_THRESHOLD: float = 0.92
+
+#: A fed predator digests until its energy falls back to this share of capacity.
+#: The rest is long because the meal is large, which is what gives prey the
+#: quiet stretches a population needs to recover.
+HUNGER_THRESHOLD: float = 0.55
+
+#: Ticks a herbivore keeps running after it has lost sight of the danger.
+FLEE_MEMORY: int = 12
+
+#: A predator abandons a chase once the prey is this far beyond the range it
+#: could see it at, or once its own energy falls this low.
+CHASE_GIVE_UP_MARGIN: float = 5.0
+CHASE_EXHAUSTION_FRACTION: float = 0.15
+
+#: Distance at which a chase becomes an attempt to bring the prey down.
+CAPTURE_RANGE: float = 1.0
+
+#: Chance the prey tears free. Speed difference and leverage move it from the
+#: baseline; being a juvenile counts against it. The bounds keep every hunt
+#: uncertain — nothing is ever a sure kill or a sure escape.
+BASE_ESCAPE_CHANCE: float = 0.35
+ESCAPE_SPEED_WEIGHT: float = 0.35
+ESCAPE_POWER_WEIGHT: float = 0.25
+ESCAPE_JUVENILE_PENALTY: float = 0.20
+MIN_ESCAPE_CHANCE: float = 0.05
+MAX_ESCAPE_CHANCE: float = 0.90
+
+#: Energy a predator takes from a kill, per unit of the prey's body.
+KILL_ENERGY_PER_SIZE: float = 16.0
+
+#: Share of its energy a prey loses to the wound when it escapes.
+WOUND_ENERGY_LOSS: float = 0.25
+
+#: Ticks before a predator that just missed can try to seize prey again.
+RECAPTURE_COOLDOWN: int = 20
 
 
 # --- Lifecycle --------------------------------------------------------------

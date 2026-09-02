@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from life_simulator.config.settings import ATTACK_RANGE, Surface
+from life_simulator.config.settings import Surface
 from life_simulator.simulation.ecosystem import Ecosystem, SpeciesConfig
 from life_simulator.simulation.entity import Diet, Entity
 from life_simulator.simulation.genome import Genome
@@ -24,10 +24,6 @@ def _small_world() -> World:
 
 def _herb(world: World, energy: float | None = None) -> Entity:
     return Entity(16.0, 16.0, Diet.HERBIVORE, Genome(), energy)
-
-
-def _carn(world: World, x: float = 16.0, energy: float | None = None) -> Entity:
-    return Entity(x, 16.0, Diet.CARNIVORE, Genome(vision=10.0), energy)
 
 
 # ---------------------------------------------------------------------------
@@ -97,30 +93,6 @@ def test_reproduction_reduces_parent_energy() -> None:
     before = herb.energy
     herb.step(world, spatial)
     assert herb.energy < before
-
-
-def test_carnivore_attack_drains_prey_energy() -> None:
-    world = _small_world()
-    herb = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(), energy=15.0)
-    carn = Entity(16.0 + ATTACK_RANGE * 0.5, 16.0, Diet.CARNIVORE, Genome(vision=10.0), energy=5.0)
-    spatial = SpatialGrid()
-    spatial.rebuild([herb, carn])
-
-    before_prey = herb.energy
-    carn.step(world, spatial)
-    assert herb.energy < before_prey
-
-
-def test_carnivore_gains_energy_from_attack() -> None:
-    world = _small_world()
-    herb = Entity(16.0, 16.0, Diet.HERBIVORE, Genome(), energy=15.0)
-    carn = Entity(16.0 + ATTACK_RANGE * 0.5, 16.0, Diet.CARNIVORE, Genome(vision=10.0), energy=2.0)
-    before_carn = carn.energy
-    spatial = SpatialGrid()
-    spatial.rebuild([herb, carn])
-    carn.step(world, spatial)
-    # Carnivore attacked within range — it should have gained energy.
-    assert carn.energy > before_carn - carn.body.tick_cost
 
 
 # ---------------------------------------------------------------------------

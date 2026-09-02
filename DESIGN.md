@@ -176,20 +176,29 @@ Everyone is single-sex; any two ready adults of the same species can pair.
 - **Uniform crossover**: each gene is taken from a random parent (50/50), then
   the child genome is mutated once. This preserves population variance better
   than blending.
-- Both parents pay an energy share to the child; both increment their
-  reproduction counter.
+- The child is placed at the midpoint between its parents (nudged onto
+  walkable ground). Both parents pay an equal share of its starting energy —
+  capped to what its newborn-sized body can actually hold, the same invariant
+  a single parent already respected — and both count the birth against their
+  own lifetime cap.
 
 ### Sexual selection
 
-When an animal is ready to mate it scores every ready candidate within vision:
+When a ready adult has no partner it scores every visible, *unpaired* ready
+adult of its own species:
 
 ```
 score = 0.6 · candidate_energy / candidate_max_energy   # honest condition signal
       + 0.4 · candidate_size_norm                       # preference for size
 ```
 
-It approaches the best-scoring candidate (which must also accept — both must be
-in the mate-seeking state). Fixed weights in v2 keep experiments
+"Accept" means something precise: pairing forms only when each side's own
+best-scoring pick is the other — a mutual top choice, not a one-sided claim.
+Once mutual, the pair is committed: neither searches again, so a third animal
+cannot poach either of them however well it would score, and the arrangement
+only ends in a birth or a death. The pair approaches each other (`SEEK_MATE`),
+and once within a short range spends `COURTSHIP_DURATION` ticks together
+(`COURT`) before conceiving. Fixed weights in v2 keep experiments
 interpretable; evolvable preference is in the backlog.
 
 ---
@@ -229,11 +238,10 @@ and the inspector.
 
 | State | Behaviour |
 |---|---|
-| `FORAGE` (default) | seek the best grass cell in vision (FOREST only), graze it; drift with the herd |
+| `FORAGE` (default) | seek the best grass cell in vision (FOREST only), graze it |
 | `FLEE` | sprint away from a detected predator; ends when the predator is lost |
 | `SEEK_MATE` / `COURT` | see Mating |
-| `REST` | brief idle when well-fed and no threat; herbivores rest little |
-| `FOLLOW_FAMILY` | juveniles shadow their parents |
+| `REST` | brief idle when well-fed and no threat |
 
 ### Predator
 
@@ -243,7 +251,19 @@ and the inspector.
 | `CHASE` | run the prey down; commits to one animal rather than switching to whichever strays nearest |
 | `REST` | long digestion after a kill — until energy drops below a hunger threshold (~50% of max); rest duration therefore emerges from metabolism |
 | `SEEK_MATE` / `COURT` | see Mating |
-| `FOLLOW_FAMILY` | juveniles shadow their parents |
+
+### Family and herd — steering, not a state
+
+There is no `FOLLOW_FAMILY` state and no tracked "herd" object. A juvenile's
+pull toward its living parents, a parent's mild pull toward its juvenile
+young, and cohesion toward same-species neighbours (scaled by the individual's
+own `sociality` gene, with separation at close range so no one stacks) are all
+nudges blended into whatever movement target an animal already had — the grass
+cell it was walking to, or the idle drift it does while resting or between
+hunts. A dedicated state was tried and dropped: gating it behind "nothing
+better to do" meant it almost never fired in a world where there is usually
+*some* grass in view, so it is felt as a constant, gentle bias on ordinary
+movement instead.
 
 ### Detection — stealth vs vision
 

@@ -268,6 +268,42 @@ def test_no_chase_runs_forever() -> None:
     assert chasing < 600
 
 
+def test_an_exhausted_predator_walks_instead_of_sprinting_after_new_prey() -> None:
+    """Giving up on one exhausted chase must not sprint straight into another.
+
+    A population thick with visible prey always has a next target, so without
+    this an exhausted predator would chain from sprint to sprint and spend
+    itself to death rather than recovering. Two candidates guarantee a fresh
+    quarry is available the instant the first is dropped as too far to chase.
+    """
+    world = _meadow()
+    hunter = _hunter(x=32.0, vision=10.0)
+    hunter.energy = 0.10 * hunter.body.max_energy  # below CHASE_EXHAUSTION_FRACTION
+    far_prey = _grazer(x=39.0, stealth=0.0)  # out of capture range either way
+    another_prey = _grazer(x=39.5, stealth=0.0)
+
+    before = hunter.energy
+    _step_all([hunter, far_prey, another_prey], world)
+
+    assert hunter.state is EntityState.HUNT  # not CHASE
+    spent = before - hunter.energy
+    assert spent < hunter.body.sprint_cost  # walked, did not pay the sprint cost
+
+
+def test_an_exhausted_predator_still_takes_a_free_capture_within_reach() -> None:
+    """Exhaustion should stop new chases, not a shot at prey already in reach."""
+    world = _meadow()
+    hunter = _hunter(x=32.0, vision=10.0)
+    hunter.energy = 0.10 * hunter.body.max_energy
+    prey = _grazer(x=32.5, stealth=0.0)  # already within CAPTURE_RANGE
+    hunter._rng.random = lambda: 1.0  # above any escape chance: forces a kill
+
+    _step_all([hunter, prey], world)
+
+    assert not prey.alive
+    assert prey.death_cause is DeathCause.PREDATION
+
+
 # --- Captures --------------------------------------------------------------
 
 

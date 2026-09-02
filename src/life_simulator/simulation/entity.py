@@ -453,9 +453,22 @@ class Entity:
             self._move_toward(tx, ty, world)
             return None
 
-        self.state = EntityState.CHASE
         self._quarry = quarry
-        self._sprint_toward(quarry.x, quarry.y, world)
+        already_close = self.distance_to(quarry) <= CAPTURE_RANGE
+        if already_close or self.energy >= CHASE_EXHAUSTION_FRACTION * self.body.max_energy:
+            self.state = EntityState.CHASE
+            self._sprint_toward(quarry.x, quarry.y, world)
+        else:
+            # Too gassed to sprint after it. Nothing but a kill lets a
+            # predator's energy recover, so sprinting anyway would spend the
+            # last of it closing on a target it cannot then afford to catch —
+            # and in a population thick with visible prey, giving up on one
+            # exhausted chase would otherwise just hand it a fresh one to
+            # sprint into next tick. Walking instead is what makes exhaustion
+            # actually mean something.
+            self.state = EntityState.HUNT
+            self._move_toward(quarry.x, quarry.y, world)
+
         if self.distance_to(quarry) <= CAPTURE_RANGE and self.age >= self._capture_rest_until:
             self._attempt_capture(quarry)
         return None
